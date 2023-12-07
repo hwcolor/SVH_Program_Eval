@@ -1,0 +1,315 @@
+---
+title: "SVH Cancer Program TABLES - PE V1"
+output: html_document
+date: "2023-12-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(tidyr)
+library(expss)
+library(readxl)
+library(reshape2)
+library(forcats)
+library(rmarkdown)
+library(googlesheets4)
+library(stringi)
+library(tidytext)
+library(data.table)
+library(batman)
+library(devtools)
+
+## analysis for preliminary report: 
+### Owner: Hannah Williams
+### Date: XX/XX/XX
+
+library(arsenal)
+
+## define statistical tests + outputs for tables
+
+my_controls <- tableby.control(
+  test = T,
+  total = T,
+  numeric.test = "kwt", cat.test = "chisq",
+  numeric.stats = c("meansd", "medianq1q3", "range", "Nmiss2"),
+  cat.stats = c("countpct", "Nmiss2"),
+  stats.labels = list(
+    meansd = "Mean (SD)",
+    medianq1q3 = "Median (Q1, Q3)",
+    range = "Min - Max",
+    Nmiss2 = "Missing"
+  ),
+  digits = 2L, digits.count = 0L, digits.pct = 1L, digits.p = 3L,
+)
+
+## ## Create "clean" labels for R markdown table
+
+my_labels2 <- list(gender = "Gender", 
+                   sex_assigned_at_birth = "Sex assigned at birth",
+                   age_at_registration = "Age at registration",
+                   age_now  = "Age",
+                   ethnicities = "Granular Race and Ethnicity",
+                   us_census_ethnicity = "US Census Race and Ethnicity",
+                   census_ethnicity_groups = "Race and Ethnicity",
+                   hp_ancestry_ashkenazi_jewish = "Ashkenazi Jewish",
+                   is_cancer_caregiver = "Cancer Caregiver",
+                   cancer_diagnosis_status = "Has history of Cancer",
+                   hp_smoking_status = "Smoking status",
+                   hp_smoking_number_years = "Smoking - number of years",
+                   hp_smoking_years_quit = "Smoking - years since quit",
+                   hp_smoking_cigs_per_day = "Number of cigarettes per day",
+                   smoking_pack_yrs = "Pack Years",
+                   has_health_profile = "Has healthprofile",
+                  
+                   compliant_mammogram_screening = "Breast Cancer Screening Recommendation",
+                   compliant_CRC_screening = "CRC Screening Recommendation",
+                   eligible_cervical_cancer_screening = "Cervical Cancer Screening Recommendation",
+                   eligible_PR_screening = "Prostate Cancer Screening Recommendation",
+                   eligible_lung_cancer_screening = "Lung Cancer Screening Recommendation",
+                   has_cancer_history = "Has cancer hx",
+                   has_no_cancer_history = "Has no cancer hx",
+                   has_active_cancer_or_chemotherapy = "Current cancer dx or tx",
+
+                   ## Breast Cancer LABELS
+                   has_breast_cancer_history = "Has breast cancer hx",
+                   has_family_history_breast_cancer = "Has family hx breast cancer",
+                   breast_changes_status = "Has had recent changes to breast",
+                   mammogram_in_last_two_years_status = "Had mammogram w/in last 2yrs",
+                   has_increased_risk_breast_cancer = "Is at increased risk of breast cancer",
+                   is_average_risk_and_up_to_date_screening_breast_cancer = "Avg risk of breast cancer + up-to-date on screening",
+                   is_average_risk_and_may_be_due_for_screening_breast_cancer = "Avg risk of breast cancer + may be due for screening",
+
+                   ## CRC Cancer LABELS
+                   has_colon_cancer_history = "Has CRC cancer hx",
+                   colon_cancer_screening_in_last_ten_years_status = "Had colon cancer screening w/in last 10 yrs",
+                   colon_cancer_screening_type = "Type of colon cancer screening",
+                   has_colon_cancer_risk_ibs = "Has IBS dx",
+                   has_colon_cancer_risk_symptoms = "Has CRC symptoms",
+                   has_no_colon_cancer_risk_factors = "Has CRC risk factors",
+                   has_colon_cancer_risk_polyps = "Has hx of colon polyps",
+                   has_family_history_colon_cancer = "Has family hx of CRC",
+                   has_increased_risk_colon_cancer = "Is at increased risk of CRC cancer",
+                   is_average_risk_and_up_to_date_screening_colon_cancer = "Avg risk of CRC + up-to-date on screening",
+                   is_average_risk_and_may_be_due_for_screening_colon_cancer = "Avg risk of CRC + may be due for screening",
+
+                   ## CERVICAL CANCER LABELS
+                   has_cervical_cancer_history = "Has cervical cancer hx",
+                   abnormal_pap_smear_status = "Had abnormal pap test",
+                   cervical_cancer_screening_in_last_three_years_status = "Had cervical cancer screening w/in last 3 yrs",
+                   has_increased_risk_cervical_cancer = "Is at increased risk of cervical cancer",
+                   is_average_risk_and_up_to_date_screening_cervical_cancer = "Avg risk of cervical + up-to-date on screening",
+                   is_average_risk_and_may_be_due_for_screening_cervical_cancer = "Avg risk of cervical + may be due for screening",
+
+                   ##PROSTATE CANCER
+                   has_prostate_cancer_history = "Has prostate cancer hx",
+                   relative_diagnosed_with_prostate_cancer_under_65_status = "Has family hx of prostate cancer (w/ dx < 65 yrs)",
+                   has_family_history_prostate_cancer = "Has family hx of prostate cancer",
+                   has_increased_risk_prostate_cancer = "Is at increased risk of prostate cancer",
+
+                   ##LUNG CANCER
+                   has_lung_cancer_history = "Has lung cancer hx",
+                   is_eligible_screening_lung_cancer = "Is eligible for lung cancer screening",
+
+                   ## KIT METRICS
+                   Test_Orders_Phi__test_type_detailed = "Test order type",
+                   kitorder_replacement_reason = "Kit Order Replacement Type",
+                   Test_Orders_Phi__tat_test_requested_to_approved_days = "Time from test request to order approval (days)",
+                   Test_Orders_Phi__tat_test_requested_to_activated_days = "Time from test request to test activation (days)",
+                   time_from_kitorder_order_to_participant_delivery_hours = "Time from kit order to delivery (hrs)",
+                   time_from_participant_delivery_to_kit_activation_hours = "Time from kit delivery to activation (hrs)",
+                   time_from_kit_activation_to_shipment_to_lab_hours = "Time from kit activation to shipment to lab (hrs)",
+                   time_from_kitorder_shipment_to_lab_to_accession_hours = "Time from shipment to lab to lab accessioning (hrs)",
+                   time_from_accession_to_report_release_hours = "Time from accessioning to report release (hrs)",
+                   time_from_kitorder_order_to_lab_to_report_release_hours = "Time from kit order to report release (hrs)",
+                   time_from_report_opened_to_consult_creation_hours = "Time from report opened to consult scheudled (hrs)",
+                   time_from_report_release_to_report_open_hours = "Time from report released to report opened (hrs)",
+                   Test_Orders_Phi__test_order_lifecycle_days = "Test order lifecyle (days)",
+                   sample_sequence_run_rejection_note = "Reason for kit failure (i.e., sample rejection)",
+                   fulfillment_batch_distribution_type = "Kit fullfilment type",
+                   issue_QNS = "Kit Failure - QNS",
+                   issue_hemolyzed = "Kit Failure - Hemolyzed",
+                   issue_fullfilment = "Kit Failure - Fullfilment issue",
+                   Test_Orders_Phi__lab_order_consult_status = "Test order consult status",
+                   Test_Orders_Phi__result_interpretation = "Test result interpretation",
+                   Test_Orders_Phi__report_opened_by_participant_at_source = "Participant viewed report (type)"
+
+
+) 
+
+
+
+
+#### #### #### #### #### #### #### TABLES START HERE #### #### #### #### #### #### #### #### #
+#### #### #### #### #### #### #### TABLES START HERE #### #### #### #### #### #### #### #### #
+
+## Table of participants vs non-participants
+
+table_one <- tableby( has_health_profile ~ employee_type + is_dependent + age_at_registration + age_now, data = db_all_population, control = my_controls)
+summary(table_one, 
+        labelTranslations = my_labels2,
+        title = "Table 1 - Characteristics of participants and non-participants"
+        )
+
+##download demographics/data of users enrolled in program
+## 
+
+
+colnames(cln_data_all)
+
+table_two <- tableby(~ Care_Program_Participants_Phi__is_dependent + Care_Program_Participants_Phi__age_at_registration + Care_Program_Participants_Phi__age_now + gender + sex_assigned_at_birth + ethnicities + us_census_ethnicity + hp_ancestry_ashkenazi_jewish +  Care_Program_Participants_Phi__cancer_diagnosis_status + Care_Program_Participants_Phi__has_known_mutation_history + Care_Program_Participants_Phi__is_cancer_caregiver + hp_smoking_status + report_ANY_symptoms + not_adherent_any + report_ANY_risk + report_ANY_test, data = cln_data_all, control = my_controls)
+
+summary(table_two, 
+        labelTranslations = my_labels2,
+        title = "Table 2 - Characteristics of participant enrolled in program"
+)
+
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r table 1}
+table_one <- tableby( ~ Care_Program_Participants_Phi__age_at_registration + age_at_registration_cat + Care_Program_Participants_Phi__age_now + age_now_cat + sex_assigned_at_birth + gender + census_ethnicity_groups + address_state + Care_Program_Participants_Phi__is_dependent + hp_smoking_status + report_ANY_symptoms + 
+                        not_adherent_any + report_ANY_risk, data = cln_data_all, control = my_controls)
+summary(table_one, 
+        labelTranslations = my_labels2,
+        title = "Table 1 - Characteristics of enrolled participants with care plans "
+)
+
+
+
+table_two <- tableby( ~ hp_breast_cancer_risk_stratification_level + hp_lung_cancer_risk_stratification_level + hp_cervical_cancer_risk_stratification_level +
+                      hp_prostate_cancer_risk_stratification_level + hp_colorectal_cancer_risk_stratification_level, data = cln_data_all, control = my_controls)
+  
+summary(table_two, 
+        labelTranslations = my_labels2,
+        title = "Table 2 - Breakdown of cancer risk categories "
+)
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r tables}
+table_one <- tableby(not_adherent_any ~ Care_Program_Participants_Phi__age_at_registration + age_at_registration_cat + Care_Program_Participants_Phi__age_now + age_now_cat + sex_assigned_at_birth + gender + census_ethnicity_groups + address_state +
+                        Care_Program_Participants_Phi__is_dependent + hp_smoking_status + report_ANY_symptoms + 
+                        report_ANY_risk, data = cln_data_all, control = my_controls)
+summary(table_one, 
+        labelTranslations = my_labels2,
+        title = "Table 1 - Characteristics of enrolled participants with care plans "
+)
+
+table_one <- tableby(report_ANY_risk ~ Care_Program_Participants_Phi__age_at_registration + age_at_registration_cat + Care_Program_Participants_Phi__age_now + age_now_cat + sex_assigned_at_birth + gender + census_ethnicity_groups + address_state +
+                        Care_Program_Participants_Phi__is_dependent + hp_smoking_status + report_ANY_symptoms + 
+                        not_adherent_any, data = cln_data_all, control = my_controls)
+summary(table_one, 
+        labelTranslations = my_labels2,
+        title = "Table 1 - Characteristics of enrolled participants with care plans "
+)
+```
+
+
+
+```{r cancer tables}
+## females only
+cln_AFAB_data <- subset(cln_data_all, cln_data_all$sex_assigned_at_birth == "F")
+
+table_AFAB_breast <- tableby(hp_breast_cancer_risk_stratification_level ~ Care_Program_Participants_Phi__age_at_registration + census_ethnicity_groups + Care_Program_Participants_Phi__is_dependent + hp_smoking_status + hp_breast_cancer_screening_adherence + hp_breast_cancer_time_since_last_mammogram + has_BREAST_symptoms_tf + report_ANY_symptoms + 
+not_adherent_any + breast_cancer_read_about_screening + breast_cancer_schedule_virtual_appointment_for_screening_plan + 
+breast_cancer_schedule_mammogram + breast_cancer_read_about_preparing_for_mammogram + breast_cancer_watch_when_start_getting_mammograms, data = cln_AFAB_data, control = my_controls)
+
+
+summary(table_AFAB_breast, 
+        labelTranslations = my_labels2,
+        title = "Table 3a - Characteristics of female participants by breast cancer risk"
+)
+
+
+colnames(cln_AFAB_data)
+table_AFAB_cervical <- tableby(hp_cervical_cancer_risk_stratification_level ~ Care_Program_Participants_Phi__age_at_registration + census_ethnicity_groups +
+                                 Care_Program_Participants_Phi__is_dependent + hp_smoking_status + 
+                                 hp_cervical_cancer_screening_adherence + hp_cervical_cancer_time_since_last_screening + 
+                                 hp_cervical_cancer_screening_result + has_CERVICAL_symptoms_tf + report_ANY_symptoms + 
+                                 not_adherent_any + has_HPV_test + HPV_test_order_status + cervical_cancer_schedule_virtual_appointment_for_screening_plan +
+                                 cervical_cancer_get_test_sent_home + cervical_cancer_read_about_screening + 
+                                 cervical_cancer_schedule_well_woman_visit_plan, data = cln_AFAB_data, control = my_controls)
+
+summary(table_AFAB_cervical, 
+        labelTranslations = my_labels2,
+        title = "Table 3b - Characteristics of female participants by cervical cancer risk"
+)
+
+## MALES ONLY
+cln_AMAB_data <- subset(cln_data_all, cln_data_all$sex_assigned_at_birth == "M")
+colnames(cln_AMAB_data)
+
+table_AMAB_prostate <- tableby(hp_prostate_cancer_risk_stratification_level ~ Care_Program_Participants_Phi__age_at_registration + census_ethnicity_groups +
+                                 Care_Program_Participants_Phi__is_dependent + hp_smoking_status + hp_prostate_cancer_yn + 
+                                 hp_prostate_cancer_screening_adherence + hp_prostate_cancer_time_since_psa_screening + 
+                                 hp_prostate_cancer_psa_test_result + has_PROSTATE_symptoms_tf + report_ANY_symptoms + 
+                                 not_adherent_any + has_PSA_test + PSA_test_order_status + prostate_cancer_read_about_screening +
+                                 prostate_cancer_get_test_sent_home + prostate_cancer_schedule_virtual_appointment_for_screening_plan +
+                                 prostate_cancer_watch_pros_and_cons_of_screening + prostate_cancer_schedule_urgent_virtual_appointment,
+                                 data = cln_AMAB_data, control = my_controls)
+
+summary(table_AMAB_prostate, 
+        labelTranslations = my_labels2,
+        title = "Table 3c - Characteristics of male participants by prostate cancer risk"
+)
+
+
+
+## LUNG CA
+## SMOKERS ONLY
+cln_smokers_data <- subset(cln_data_all, (cln_data_all$hp_smoking_status == "current_smoker" | cln_data_all$hp_smoking_status == "former_smoker"))
+
+colnames(cln_smokers_data)
+
+table_LUNG <- tableby(hp_smoking_status ~ sex_assigned_at_birth + gender + Care_Program_Participants_Phi__age_at_registration +
+                        census_ethnicity_groups + Care_Program_Participants_Phi__is_dependent + 
+                        hp_lung_cancer_risk_stratification_level + hp_smoking_cigs_per_day + 
+                        hp_smoking_years_quit + hp_smoking_number_years + smoking_pack_yrs + hp_lung_cancer_screening_adherence +
+                        #hp_lung_cancer_time_since_low_dose_ct_scan + 
+                        has_LUNG_symptoms_tf + report_ANY_symptoms + not_adherent_any +
+                        lung_cancer_read_benefits_of_quitting_smoking + lung_cancer_schedule_virtual_appointment_for_help_quitting_smoking +
+                        lung_cancer_schedule_virtual_appointment_for_screening_plan, data = cln_smokers_data, control = my_controls)
+
+summary(table_LUNG, 
+        labelTranslations = my_labels2,
+        title = "Table 3d - Characteristics of current and former smokers by lung cancer risk"
+)
+
+
+
+### CRC
+
+colnames(cln_data_all)
+table_CRC_risk <- tableby(hp_colorectal_cancer_risk_stratification_level ~ Care_Program_Participants_Phi__age_at_registration + sex_assigned_at_birth + 
+                             gender + census_ethnicity_groups + Care_Program_Participants_Phi__is_dependent + hp_smoking_status + hp_polyps_diagnosis_yn + 
+                            hp_had_10_or_more_polyps_yn + hp_cystic_fibrosis_diagnosis_yn + hp_crohns_disease_diagnosis_yn + hp_colorectal_cancer_screening_adherence +
+                            hp_colorectal_cancer_time_since_last_colonoscopy + hp_colorectal_cancer_result_last_colonoscopy + hp_colorectal_cancer_time_since_last_partial_colonoscopy +
+                            hp_colorectal_cancer_result_last_partial_colonoscopy + hp_colorectal_cancer_time_since_last_stool_blood_test + hp_colorectal_cancer_result_last_stool_blood_test +
+                            hp_colorectal_cancer_time_since_last_stool_dna_test + hp_colorectal_cancer_result_last_stool_dna_test + #hp_colorectal_cancer_time_since_last_virtual_colonoscopy + hp_colorectal_cancer_result_last_virtual_colonoscopy + 
+                            has_CRC_symptoms_tf + report_ANY_symptoms + 
+                            not_adherent_any + has_FIT_test + FIT_test_order_status + colorectal_cancer_read_about_screening +
+                            colorectal_cancer_schedule_virtual_appointment_for_screening_plan + colorectal_cancer_get_test_sent_home + colorectal_cancer_schedule_colonoscopy +
+                            colorectal_cancer_watch_which_screening_should_i_do, data = cln_data_all, control = my_controls)
+
+summary(table_CRC_risk, 
+        labelTranslations = my_labels2,
+        title = "Table 3e - Characteristics of participants by CRC risk"
+)
+```
+
+
+
+
+
+
+
