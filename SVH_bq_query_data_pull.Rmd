@@ -1,0 +1,1241 @@
+---
+title: "SVH_data_pull_bigquery"
+output: html_document
+date: "2023-12-06"
+---
+
+```{r setup, include=FALSE}
+library(bigrquery)
+
+bq_auth(
+  path = NULL,
+  scopes = c("https://www.googleapis.com/auth/bigquery",
+             "https://www.googleapis.com/auth/cloud-platform"),
+  cache = gargle::gargle_oauth_cache(),
+  use_oob = gargle::gargle_oob_default(),
+  token = NULL
+)
+
+```
+
+## CHARACTERISTICS FOR ALL ELIGIBLE PARTICIPANTS REGARDLESS OF ENROLLMENT
+Includes participants and non-participants.
+
+```{r db_all_population}
+### DIRECTLY DOWNLOAD THEN SAVE THE RAW DATA
+##download demographics/data of all eligible individuals
+
+project_id = 'dw-color'
+db_all_population = "
+ SELECT
+    `Care_Program_Participants_Phi`.`allow_list_entry_id` AS `allow_list_entry_id`,
+    `Care_Program_Participants_Phi`.`coloruser_id` AS `coloruser_id`,
+    `Care_Program_Participants_Phi`.`program` AS `program`,
+    `Care_Program_Participants_Phi`.`has_health_profile` AS `has_health_profile`,
+    `Care_Program_Participants_Phi`.`count_participants_with_care_plan`,
+    `Care_Program_Participants_Phi`.`is_fake` AS `is_fake`,
+    `Care_Program_Participants_Phi`.`is_dependent` AS `is_dependent`,
+    `Care_Program_Participants_Phi`.`employee_type` AS `employee_type`,
+  
+--DEMOGRAPHICS --
+   
+  `Care_Program_Participants_Phi`.`age_at_registration` AS `age_at_registration`,
+  `Care_Program_Participants_Phi`.`age_now` AS `age_now`,
+  `Care_Program_Participants_Phi`.`population_id` AS `population_id`,
+  `Care_Program_Participants_Phi`.`program_id` AS `program_id`,
+  `Care_Program_Participants_Phi`.`population_membership_id` AS `population_membership_id`,
+  `Care_Program_Participants_Phi`.`population_membership_created_at` AS `population_membership_created_at`,
+
+FROM
+  `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi`
+WHERE
+  (`Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+    AND `Care_Program_Participants_Phi`.`is_fake` = FALSE)
+"
+
+tb <- bq_project_query(project_id, db_all_population)
+raw_dat_all_population <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_all_population, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_all_population',Sys.Date() ,'.csv' ))
+```
+
+## DEMOGRAPHICS DATA FOR ENROLLED PARTICPANTS WITH A CARE PLAN
+
+```{r db_demographics}
+##download demographics/data of users enrolled in program
+
+project_id = 'dw-color'
+db_demographics = "
+SELECT
+`marts_phi.health_profile`.`coloruser_id` AS `coloruser_id`,
+`marts_phi.health_profile`.`health_profile_id` AS `health_profile_id`,
+`Care_Program_Participants_Phi`.`program` AS `Care_Program_Participants_Phi__program`,
+`Care_Program_Participants_Phi`.`employee_type` AS `Care_Program_Participants_Phi__employee_type`,
+`Care_Program_Participants_Phi`.`is_dependent` AS `Care_Program_Participants_Phi__is_dependent`,
+`Care_Program_Participants_Phi`.`is_fake` AS `Care_Program_Participants_Phi__is_fake`,
+`marts_phi.health_profile`.`hp_concern_other_help_text_yn` AS `hp_concern_other_help_text_yn`,
+a.address_zip_code,
+a.address_state,
+
+--DEMOGRAPHICS --
+a.preferred_name,
+a.pronouns,
+a.gender,
+a.sex_assigned_at_birth,
+a.gender_identity,
+a.self_described_gender_identity,
+a.sexual_orientation,
+a.self_described_sexual_orientation,
+a.preferred_locale,
+a.is_translator_required,
+a.preferred_locale_language,
+a.ethnicities,
+a.us_census_ethnicity,
+`marts_phi.health_profile`.`hp_ancestry_ashkenazi_jewish` AS `hp_ancestry_ashkenazi_jewish`,
+a.birthday,
+`Care_Program_Participants_Phi`.`age_at_registration` AS `Care_Program_Participants_Phi__age_at_registration`,
+`Care_Program_Participants_Phi`.`age_now` AS `Care_Program_Participants_Phi__age_now`,
+----
+`Care_Program_Participants_Phi`.`cancer_diagnosis_status` AS `Care_Program_Participants_Phi__cancer_diagnosis_status`,
+`Care_Program_Participants_Phi`.`has_known_mutation_history` AS `Care_Program_Participants_Phi__has_known_mutation_history`,
+`Care_Program_Participants_Phi`.`is_cancer_caregiver` AS `Care_Program_Participants_Phi__is_cancer_caregiver`,
+`marts_phi.health_profile`.`hp_measurement_blood_pressure_systolic` AS `hp_measurement_blood_pressure_systolic`,
+`marts_phi.health_profile`.`hp_measurement_blood_pressure_diastolic` AS `hp_measurement_blood_pressure_diastolic`,
+`marts_phi.health_profile`.`hp_measurement_height` AS `hp_measurement_height`,
+`marts_phi.health_profile`.`hp_measurement_weight` AS `hp_measurement_weight`,
+`marts_phi.health_profile`.`hp_measurement_heart_rate` AS `hp_measurement_heart_rate`,
+`marts_phi.health_profile`.`hp_measurement_bmi` AS `hp_measurement_bmi`,
+`marts_phi.health_profile`.`hp_measurement_heart_rate_category` AS `hp_measurement_heart_rate_category`,
+`marts_phi.health_profile`.`hp_measurement_blood_pressure_category` AS `hp_measurement_blood_pressure_category`,
+`marts_phi.health_profile`.`hp_measurement_bmi_category` AS `hp_measurement_bmi_category`,
+`marts_phi.health_profile`.`hp_had_prior_heart_health_diagnosis_yn` AS `hp_had_prior_heart_health_diagnosis_yn`,
+
+-- SMOKING HX ---
+`marts_phi.health_profile`.`hp_smoking_status` AS `hp_smoking_status`,
+`Care_Program_Participants_Phi`.`count_current_smoker` AS `Care_Program_Participants_Phi__count_current_smoker`,
+`marts_phi.health_profile`.`hp_smoking_number_years` AS `hp_smoking_number_years`,
+`marts_phi.health_profile`.`hp_smoking_years_quit` AS `hp_smoking_years_quit`,
+`marts_phi.health_profile`.`hp_smoking_cigs_per_day` AS `hp_smoking_cigs_per_day`,
+
+
+-- ACTION ITEMS
+  `Care_Program_Participants_Phi`.`has_action_items` AS `Care_Program_Participants_Phi__has_action_items`,
+  `Care_Program_Participants_Phi`.`has_completed_action_items` AS `Care_Program_Participants_Phi__has_completed_action_items`,
+  `Care_Program_Participants_Phi`.`count_with_action_items` AS `Care_Program_Participants_Phi__count_with_action_items`,
+  `Care_Program_Participants_Phi`.`count_with_completed_action_items` AS `Care_Program_Participants_Phi__count_with_completed`,
+
+`Care_Program_Participants_Phi`.`has_health_profile` AS `Care_Program_Participants_Phi__has_health_profile`,
+`Care_Program_Participants_Phi`.`population_id` AS `Care_Program_Participants_Phi__population_id`,
+`Care_Program_Participants_Phi`.`program_id` AS `Care_Program_Participants_Phi__program_id`,
+`Care_Program_Participants_Phi`.`population_member_email` AS `Care_Program_Participants_Phi__population_member_email`,
+`Care_Program_Participants_Phi`.`population_membership_id` AS `Care_Program_Participants_Phi__population_membership_id`,
+`Care_Program_Participants_Phi`.`population_membership_created_at` AS `Care_Program_population_membership_created_at`,
+a.heard_about_color_through,
+a._src_created_at,
+a._src_updated_at,
+
+
+FROM
+`dw-color.marts_phi.health_profile` `marts_phi.health_profile`
+
+LEFT JOIN `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi` ON `marts_phi.health_profile`.`health_profile_id` = `Care_Program_Participants_Phi`.`health_profile_id`
+LEFT JOIN `dw-color.intermediate_phi.users_coloruser` `a` ON `marts_phi.health_profile`.`coloruser_id` = `a`.`coloruser_id`
+
+WHERE
+(`Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+  AND `Care_Program_Participants_Phi`.`is_fake` = FALSE
+  AND `Care_Program_Participants_Phi`.`count_participants_with_care_plan` = 1)
+"
+
+tb <- bq_project_query(project_id, db_demographics)
+raw_dat_demographics <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_demographics, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_demographics',Sys.Date() ,'.csv' ))
+
+```
+
+## TESTING DATA
+
+```{r db_tests}
+##download at-home test data + results 
+
+project_id = 'dw-color'
+db_tests = "
+SELECT
+    `Care_Program_Participants_Phi`.`coloruser_id` AS `coloruser_id`,
+    `Care_Program_Participants_Phi`.`program` AS `Care_Program_Participants_Phi__program`,
+    `Care_Program_Participants_Phi`.`is_fake` AS `Care_Program_Participants_Phi__is_fake`,
+    
+  `Test_Orders_Phi`.`test_order_unique_id` AS `Test_Orders_Phi__test_order_unique_id`,
+  `Test_Orders_Phi`.`test_order_id` AS `Test_Orders_Phi__test_order_id`,
+  `Test_Orders_Phi`.`kitorder_id` AS `Test_Orders_Phi__kitorder_id`,
+  `Test_Orders_Phi`.`test_type_detailed` AS `Test_Orders_Phi__test_type_detailed`,
+  `Test_Orders_Phi`.`test_subtype` AS `Test_Orders_Phi__test_subtype`,
+  `Test_Orders_Phi`.`service_panel_type` AS `Test_Orders_Phi__service_panel_type`,
+  `Test_Orders_Phi`.`test_condition_category` AS `Test_Orders_Phi__test_condition_category`,
+  `Test_Orders_Phi`.`sample_barcode` AS `Test_Orders_Phi__sample_barcode`,
+  `Test_Orders_Phi`.`kit_barcode` AS `Test_Orders_Phi__kit_barcode`,
+  `Test_Orders_Phi`.`requisition_number` AS `Test_Orders_Phi__requisition_number`,
+  `Test_Orders_Phi`.`participant_code_for_counting` AS `Test_Orders_Phi__participant_code_for_counting`,
+  `Test_Orders_Phi`.`test_order_status` AS `Test_Orders_Phi__test_order_status`,
+  `Test_Orders_Phi`.`level_three_status` AS `Test_Orders_Phi__level_three_status`,
+  `Test_Orders_Phi`.`level_three_status_order` AS `Test_Orders_Phi__level_three_status_order`,
+  `Test_Orders_Phi`.`level_two_status` AS `Test_Orders_Phi__level_two_status`,
+  `Test_Orders_Phi`.`level_one_status` AS `Test_Orders_Phi__level_one_status`,
+  `Test_Orders_Phi`.`test_order_status_order` AS `Test_Orders_Phi__test_order_status_order`,
+  `Test_Orders_Phi`.`level_two_status_order` AS `Test_Orders_Phi__level_two_status_order`,
+  `Test_Orders_Phi`.`level_one_status_order` AS `Test_Orders_Phi__level_one_status_order`,
+  `Test_Orders_Phi`.`test_requested_at` AS `Test_Orders_Phi__test_requested_at`,
+  `Test_Orders_Phi`.`test_order_placed_at` AS `Test_Orders_Phi__test_order_placed_at`,
+  `Test_Orders_Phi`.`test_order_approved_at` AS `Test_Orders_Phi__test_order_approved_at`,
+  `Test_Orders_Phi`.`sample_created_at` AS `Test_Orders_Phi__sample_created_at`,
+  `Test_Orders_Phi`.`sample_activated_at` AS `Test_Orders_Phi__sample_activated_at`,
+  `Test_Orders_Phi`.`sample_accessioned_at` AS `Test_Orders_Phi__sample_accessioned_at`,
+  `Test_Orders_Phi`.`first_sequenced_at` AS `Test_Orders_Phi__first_sequenced_at`,
+  `Test_Orders_Phi`.`first_ssr_approved_at` AS `Test_Orders_Phi__first_ssr_approved_at`,
+  `Test_Orders_Phi`.`last_sequenced_at` AS `Test_Orders_Phi__last_sequenced_at`,
+  `Test_Orders_Phi`.`last_ssr_approved_at` AS `Test_Orders_Phi__last_ssr_approved_at`,
+  `Test_Orders_Phi`.`report_content_generated_at` AS `Test_Orders_Phi__report_content_generated_at`,
+  `Test_Orders_Phi`.`report_signed_out_at` AS `Test_Orders_Phi__report_signed_out_at`,
+  `Test_Orders_Phi`.`result_created_at` AS `Test_Orders_Phi__result_created_at`,
+  `Test_Orders_Phi`.`marked_ready_for_release_at` AS `Test_Orders_Phi__marked_ready_for_release_at`,
+  `Test_Orders_Phi`.`sent_to_ordering_physician_at` AS `Test_Orders_Phi__sent_to_ordering_physician_at`,
+  `Test_Orders_Phi`.`report_opened_by_participant_at` AS `Test_Orders_Phi__report_opened_by_participant_at`,
+  `Test_Orders_Phi`.`first_report_released_at` AS `Test_Orders_Phi__first_report_released_at`,
+  `Test_Orders_Phi`.`latest_report_released_at` AS `Test_Orders_Phi__latest_report_released_at`,
+  `Test_Orders_Phi`.`test_order_canceled_at` AS `Test_Orders_Phi__test_order_canceled_at`,
+  `Test_Orders_Phi`.`lab_order_item_requested_at` AS `Test_Orders_Phi__lab_order_item_requested_at`,
+  `Test_Orders_Phi`.`lab_order_item_in_progress_at` AS `Test_Orders_Phi__lab_order_item_in_progress_at`,
+  `Test_Orders_Phi`.`raw_results_received_at` AS `Test_Orders_Phi__raw_results_received_at`,
+  `Test_Orders_Phi`.`lab_order_item_completed_at` AS `Test_Orders_Phi__lab_order_item_completed_at`,
+  `Test_Orders_Phi`.`lab_order_item_rejected_at` AS `Test_Orders_Phi__lab_order_item_rejected_at`,
+  `Test_Orders_Phi`.`lab_order_item_canceled_at` AS `Test_Orders_Phi__lab_order_item_canceled_at`,
+  `Test_Orders_Phi`.`lab_order_item_failed_at` AS `Test_Orders_Phi__lab_order_item_failed_at`,
+  `Test_Orders_Phi`.`current_state_timestamp` AS `Test_Orders_Phi__current_state_timestamp`,
+-- `Test_Orders_Phi`.`physician_order_created_at` AS `Test_Orders_Phi__physician_order_created_at`,
+--  `Test_Orders_Phi`.`independent_physician_order_created_at` AS `Test_Orders_Phi__independent_physician_order_created_at`,
+  `Test_Orders_Phi`.`combined_physician_order_created_at` AS `Test_Orders_Phi__combined_physician_order_created_at`,
+  
+  --TAT--
+  `Test_Orders_Phi`.`test_order_lifecycle_days` AS `Test_Orders_Phi__test_order_lifecycle_days`,
+  `Test_Orders_Phi`.`tat_test_requested_to_approved_days` AS `Test_Orders_Phi__tat_test_requested_to_approved_days`,
+  `Test_Orders_Phi`.`tat_test_requested_to_activated_days` AS `Test_Orders_Phi__tat_test_requested_to_activated_days`,
+  `Test_Orders_Phi`.`tat_test_requested_to_accessioned_days` AS `Test_Orders_Phi__tat_test_requested_to_accessioned_days`,
+  `Test_Orders_Phi`.`tat_test_accessioned_to_report_released_days` AS `Test_Orders_Phi__tat_test_accessioned_to_report_rel_953b2a48`,
+  
+  
+  `Test_Orders_Phi`.`test_type` AS `Test_Orders_Phi__test_type`,
+ -- `Test_Orders_Phi`.`service_category` AS `Test_Orders_Phi__service_category`,
+--  `Test_Orders_Phi`.`business_line` AS `Test_Orders_Phi__business_line`,
+  `Test_Orders_Phi`.`product_area` AS `Test_Orders_Phi__product_area`,
+--  `Test_Orders_Phi`.`population_id` AS `Test_Orders_Phi__population_id`,
+  `Test_Orders_Phi`.`population` AS `Test_Orders_Phi__population`,
+--  `Test_Orders_Phi`.`organization_id` AS `Test_Orders_Phi__organization_id`,
+--  `Test_Orders_Phi`.`organization` AS `Test_Orders_Phi__organization`,
+--  `Test_Orders_Phi`.`customer_id` AS `Test_Orders_Phi__customer_id`,
+--  `Test_Orders_Phi`.`customer` AS `Test_Orders_Phi__customer`,
+--  `Test_Orders_Phi`.`customer_category` AS `Test_Orders_Phi__customer_category`,
+--  `Test_Orders_Phi`.`customer_subcategory` AS `Test_Orders_Phi__customer_subcategory`,
+--  `Test_Orders_Phi`.`programs` AS `Test_Orders_Phi__programs`,
+--  `Test_Orders_Phi`.`program_ids` AS `Test_Orders_Phi__program_ids`,
+--  `Test_Orders_Phi`.`is_cancer_beta_population` AS `Test_Orders_Phi__is_cancer_beta_population`,
+  `Test_Orders_Phi`.`lab_id` AS `Test_Orders_Phi__lab_id`,
+  `Test_Orders_Phi`.`lab` AS `Test_Orders_Phi__lab`,
+  `Test_Orders_Phi`.`lab_order_id` AS `Test_Orders_Phi__lab_order_id`,
+  `Test_Orders_Phi`.`lab_order_item_id` AS `Test_Orders_Phi__lab_order_item_id`,
+  `Test_Orders_Phi`.`lab_order_item_status` AS `Test_Orders_Phi__lab_order_item_status`,
+  `Test_Orders_Phi`.`participant_details_source` AS `Test_Orders_Phi__participant_details_source`,
+--  `Test_Orders_Phi`.`participant_first_name` AS `Test_Orders_Phi__participant_first_name`,
+--  `Test_Orders_Phi`.`participant_last_name` AS `Test_Orders_Phi__participant_last_name`,
+--  `Test_Orders_Phi`.`participant_preferred_name` AS `Test_Orders_Phi__participant_preferred_name`,
+--  `Test_Orders_Phi`.`participant_birthday` AS `Test_Orders_Phi__participant_birthday`,
+--  `Test_Orders_Phi`.`participant_current_age` AS `Test_Orders_Phi__participant_current_age`,
+  `Test_Orders_Phi`.`participant_age_at_test_order` AS `Test_Orders_Phi__participant_age_at_test_order`,
+--  `Test_Orders_Phi`.`participant_pronouns` AS `Test_Orders_Phi__participant_pronouns`,
+--  `Test_Orders_Phi`.`participant_sex_assigned_at_birth` AS `Test_Orders_Phi__participant_sex_assigned_at_birth`,
+--  `Test_Orders_Phi`.`participant_gender_identity` AS `Test_Orders_Phi__participant_gender_identity`,
+--  `Test_Orders_Phi`.`participant_self_described_gender_identity` AS `Test_Orders_Phi__participant_self_described_gender_identity`,
+--  `Test_Orders_Phi`.`participant_self_described_sexual_orientation` AS `Test_Orders_Phi__participant_self_described_sexual__a09e386f`,
+--  `Test_Orders_Phi`.`participant_sexual_orientation` AS `Test_Orders_Phi__participant_sexual_orientation`,
+--  `Test_Orders_Phi`.`participant_ethnicities` AS `Test_Orders_Phi__participant_ethnicities`,
+--  `Test_Orders_Phi`.`participant_us_census_ethnicity` AS `Test_Orders_Phi__participant_us_census_ethnicity`,
+-- `Test_Orders_Phi`.`participant_phone_number` AS `Test_Orders_Phi__participant_phone_number`,
+--  `Test_Orders_Phi`.`participant_email` AS `Test_Orders_Phi__participant_email`,
+  `Test_Orders_Phi`.`participant_address_state` AS `Test_Orders_Phi__participant_address_state`,
+  `Test_Orders_Phi`.`participant_address_zip_code` AS `Test_Orders_Phi__participant_address_zip_code`,
+  `Test_Orders_Phi`.`lab_order_consult_workflow` AS `Test_Orders_Phi__lab_order_consult_workflow`,
+  `Test_Orders_Phi`.`lab_order_consult_status` AS `Test_Orders_Phi__lab_order_consult_status`,
+  `Test_Orders_Phi`.`patient_id` AS `Test_Orders_Phi__patient_id`,
+  `Test_Orders_Phi`.`sample_id` AS `Test_Orders_Phi__sample_id`,
+  `Test_Orders_Phi`.`sample_id_for_counting` AS `Test_Orders_Phi__sample_id_for_counting`,
+  `Test_Orders_Phi`.`kit_id` AS `Test_Orders_Phi__kit_id`,
+  `Test_Orders_Phi`.`kit_id_for_counting` AS `Test_Orders_Phi__kit_id_for_counting`,
+  `Test_Orders_Phi`.`test_bundle_id` AS `Test_Orders_Phi__test_bundle_id`,
+  `Test_Orders_Phi`.`purchase_id` AS `Test_Orders_Phi__purchase_id`,
+  `Test_Orders_Phi`.`patient_profile_id` AS `Test_Orders_Phi__patient_profile_id`,
+  `Test_Orders_Phi`.`purchase_number` AS `Test_Orders_Phi__purchase_number`,
+  `Test_Orders_Phi`.`fulfillment_id` AS `Test_Orders_Phi__fulfillment_id`,
+  `Test_Orders_Phi`.`fulfillment_batch_id` AS `Test_Orders_Phi__fulfillment_batch_id`,
+  `Test_Orders_Phi`.`personal_identity_id` AS `Test_Orders_Phi__personal_identity_id`,
+--  `Test_Orders_Phi`.`physician_order_id` AS `Test_Orders_Phi__physician_order_id`,
+--  `Test_Orders_Phi`.`physician_order_status` AS `Test_Orders_Phi__physician_order_status`,
+  `Test_Orders_Phi`.`physician_order_type` AS `Test_Orders_Phi__physician_order_type`,
+   `Test_Orders_Phi`.`independent_physician_order_id` AS `Test_Orders_Phi__independent_physician_order_id`,
+  `Test_Orders_Phi`.`independent_physician_order_status` AS `Test_Orders_Phi__independent_physician_order_status`,
+  `Test_Orders_Phi`.`combined_physician_order_status` AS `Test_Orders_Phi__combined_physician_order_status`,
+  `Test_Orders_Phi`.`lab_order_consult_id` AS `Test_Orders_Phi__lab_order_consult_id`,
+  `Test_Orders_Phi`.`allow_list_entry_id` AS `Test_Orders_Phi__allow_list_entry_id`,
+  `Test_Orders_Phi`.`participant_address_id` AS `Test_Orders_Phi__participant_address_id`,
+  `Test_Orders_Phi`.`netsuite_id` AS `Test_Orders_Phi__netsuite_id`,
+  `Test_Orders_Phi`.`test_order_number` AS `Test_Orders_Phi__test_order_number`,
+  `Test_Orders_Phi`.`kitorder_number` AS `Test_Orders_Phi__kitorder_number`,
+  `Test_Orders_Phi`.`fulfillment_batch_distribution_type_detail` AS `Test_Orders_Phi__fulfillment_batch_distribution_type_detail`,
+--  `Test_Orders_Phi`.`fulfillment_batch_tracking_numbers` AS `Test_Orders_Phi__fulfillment_batch_tracking_numbers`,
+  `Test_Orders_Phi`.`outbound_shipment_status` AS `Test_Orders_Phi__outbound_shipment_status`,
+  `Test_Orders_Phi`.`outbound_shipment_in_transit_at` AS `Test_Orders_Phi__outbound_shipment_in_transit_at`,
+  `Test_Orders_Phi`.`outbound_shipment_delivered_at` AS `Test_Orders_Phi__outbound_shipment_delivered_at`,
+ -- `Test_Orders_Phi`.`outbound_shipment_tracking_number` AS `Test_Orders_Phi__outbound_shipment_tracking_number`,
+  `Test_Orders_Phi`.`return_shipment_status` AS `Test_Orders_Phi__return_shipment_status`,
+  `Test_Orders_Phi`.`return_shipment_in_transit_at` AS `Test_Orders_Phi__return_shipment_in_transit_at`,
+  `Test_Orders_Phi`.`return_shipment_delivered_at` AS `Test_Orders_Phi__return_shipment_delivered_at`,
+--  `Test_Orders_Phi`.`return_shipment_tracking_number` AS `Test_Orders_Phi__return_shipment_tracking_number`,
+--  `Test_Orders_Phi`.`fulfillment_order_status` AS `Test_Orders_Phi__fulfillment_order_status`,
+   
+  `Test_Orders_Phi`.`is_refulfillment` AS `Test_Orders_Phi__is_refulfillment`,
+  `Test_Orders_Phi`.`is_refulfilled` AS `Test_Orders_Phi__is_refulfilled`,
+  
+ -- `Test_Orders_Phi`.`outbound_distribution_type` AS `Test_Orders_Phi__outbound_distribution_type`,
+ -- `Test_Orders_Phi`.`outbound_distribution_type_group` AS `Test_Orders_Phi__outbound_distribution_type_group`,
+ -- `Test_Orders_Phi`.`outbound_shipping_carrier` AS `Test_Orders_Phi__outbound_shipping_carrier`,
+  `Test_Orders_Phi`.`outbound_package_type` AS `Test_Orders_Phi__outbound_package_type`,
+--  `Test_Orders_Phi`.`outbound_tracking_number` AS `Test_Orders_Phi__outbound_tracking_number`,
+--  `Test_Orders_Phi`.`inbound_tracking_number` AS `Test_Orders_Phi__inbound_tracking_number`,
+  `Test_Orders_Phi`.`count_sample_sequence_runs` AS `Test_Orders_Phi__count_sample_sequence_runs`,
+  `Test_Orders_Phi`.`has_shipment_to_participant_shipped` AS `Test_Orders_Phi__has_shipment_to_participant_shipped`,
+  `Test_Orders_Phi`.`is_shipment_to_participant_delivered` AS `Test_Orders_Phi__is_shipment_to_participant_delivered`,
+  
+  --T/F sample journey
+  `Test_Orders_Phi`.`is_sample_activated` AS `Test_Orders_Phi__is_sample_activated`,
+  `Test_Orders_Phi`.`is_sample_on_way_to_lab` AS `Test_Orders_Phi__is_sample_on_way_to_lab`,
+  `Test_Orders_Phi`.`is_sample_accessioned` AS `Test_Orders_Phi__is_sample_accessioned`,
+  `Test_Orders_Phi`.`has_sample_sequence_run` AS `Test_Orders_Phi__has_sample_sequence_run`,
+  `Test_Orders_Phi`.`is_sample_sequence_run_approved` AS `Test_Orders_Phi__is_sample_sequence_run_approved`,
+  `Test_Orders_Phi`.`has_report_content_generated` AS `Test_Orders_Phi__has_report_content_generated`,
+  `Test_Orders_Phi`.`is_report_signed_out` AS `Test_Orders_Phi__is_report_signed_out`,
+  `Test_Orders_Phi`.`is_report_sent_to_ordering_physician` AS `Test_Orders_Phi__is_report_sent_to_ordering_physician`,
+  `Test_Orders_Phi`.`is_report_ready_for_release` AS `Test_Orders_Phi__is_report_ready_for_release`,
+  `Test_Orders_Phi`.`has_report_released` AS `Test_Orders_Phi__has_report_released`,
+  `Test_Orders_Phi`.`has_report_on_hold` AS `Test_Orders_Phi__has_report_on_hold`,
+  `Test_Orders_Phi`.`has_report_opened_by_participant` AS `Test_Orders_Phi__has_report_opened_by_participant`,
+  `Test_Orders_Phi`.`is_test_order_canceled` AS `Test_Orders_Phi__is_test_order_canceled`,
+  `Test_Orders_Phi`.`is_sample_decommissioned` AS `Test_Orders_Phi__is_sample_decommissioned`,
+  `Test_Orders_Phi`.`is_report_withdrawn` AS `Test_Orders_Phi__is_report_withdrawn`,
+  `Test_Orders_Phi`.`has_received_raw_results` AS `Test_Orders_Phi__has_received_raw_results`,
+  `Test_Orders_Phi`.`result_interpretation` AS `Test_Orders_Phi__result_interpretation`,
+  `Test_Orders_Phi`.`is_result_abnormal` AS `Test_Orders_Phi__is_result_abnormal`,
+  `Test_Orders_Phi`.`analyte` AS `Test_Orders_Phi__analyte`,
+  `Test_Orders_Phi`.`is_lab_order_item_completed` AS `Test_Orders_Phi__is_lab_order_item_completed`,
+  `Test_Orders_Phi`.`is_lab_order_item_canceled` AS `Test_Orders_Phi__is_lab_order_item_canceled`,
+  `Test_Orders_Phi`.`is_lab_order_item_failed` AS `Test_Orders_Phi__is_lab_order_item_failed`,
+  `Test_Orders_Phi`.`was_lab_order_item_rejected` AS `Test_Orders_Phi__was_lab_order_item_rejected`,
+  `Test_Orders_Phi`.`lab_order_item_failure_reason` AS `Test_Orders_Phi__lab_order_item_failure_reason`,
+  `Test_Orders_Phi`.`has_rejected_sample_sequence_run` AS `Test_Orders_Phi__has_rejected_sample_sequence_run`,
+
+  `Test_Orders_Phi`.`is_labcorp_laborder` AS `Test_Orders_Phi__is_labcorp_laborder`,
+  `Test_Orders_Phi`.`has_report_file` AS `Test_Orders_Phi__has_report_file`,
+  `Test_Orders_Phi`.`has_report_details_page_view` AS `Test_Orders_Phi__has_report_details_page_view`,
+  `Test_Orders_Phi`.`report_opened_by_participant_at_source` AS `Test_Orders_Phi__report_opened_by_participant_at_source`,
+  `Test_Orders_Phi`.`test_order_initiation_type` AS `Test_Orders_Phi__test_order_initiation_type`,
+  `Test_Orders_Phi`.`hours_diff_test_request_physician_order` AS `Test_Orders_Phi__hours_diff_test_request_physician_order`,
+  `Test_Orders_Phi`.`_purchase_created_at` AS `Test_Orders_Phi___purchase_created_at`,
+  `Test_Orders_Phi`.`is_latest_test_by_service_panel` AS `Test_Orders_Phi__is_latest_test_by_service_panel`,
+  `Test_Orders_Phi`.`_does_report_have_nonnull_opened_at_timestamp` AS `Test_Orders_Phi___does_report_have_nonnull_opened_a_7fb12bf7`,
+  `Test_Orders_Phi`.`_does_report_file_have_nonnull_downloaded_by_patient_at` AS `Test_Orders_Phi___does_report_file_have_nonnull_dow_5d895c0a`,
+  `Test_Orders_Phi`.`_has_product_area_overwrite` AS `Test_Orders_Phi___has_product_area_overwrite`,
+
+FROM
+  `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi`
+
+LEFT JOIN `dw-color.marts_phi.test_orders_phi` `Test_Orders_Phi` ON `Care_Program_Participants_Phi`.`patient_id` = `Test_Orders_Phi`.`patient_id`
+
+  
+WHERE
+  ( `Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+   AND `Care_Program_Participants_Phi`.`is_fake` = FALSE
+    AND `Care_Program_Participants_Phi`.`count_participants_with_care_plan` = 1)
+"
+
+tb <- bq_project_query(project_id, db_tests)
+raw_dat_tests <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_tests, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_tests',Sys.Date() ,'.csv' ))
+
+```
+
+## CANCER TABLES 
+Download cancer specific tables - these queries include relevant fields for each cancer type.
+
+```{r db_BREAST}
+## BREAST CANCER
+project_id = 'dw-color'
+db_cancer_BREAST = "
+SELECT
+  `marts_phi.health_profile`.`coloruser_id` AS `coloruser_id`,
+  `marts_phi.health_profile`.`health_profile_id` AS `health_profile_id`,
+  `Care_Program_Participants_Phi`.`program` AS `Care_Program_Participants_Phi__program`,
+  `Care_Program_Participants_Phi`.`employee_type` AS `Care_Program_Participants_Phi__employee_type`,
+  `Care_Program_Participants_Phi`.`is_dependent` AS `Care_Program_Participants_Phi__is_dependent`,
+  `Care_Program_Participants_Phi`.`is_fake` AS `Care_Program_Participants_Phi__is_fake`,
+  `marts_phi.health_profile`.`hp_concern_other_help_text_yn` AS `hp_concern_other_help_text_yn`,
+
+a.address_zip_code,
+a.address_state,
+
+--DEMOGRAPHICS --
+a.preferred_name,
+a.pronouns,
+a.gender,
+a.sex_assigned_at_birth,
+a.gender_identity,
+a.self_described_gender_identity,
+a.sexual_orientation,
+a.self_described_sexual_orientation,
+a.preferred_locale,
+a.is_translator_required,
+a.preferred_locale_language,
+a.ethnicities,
+a.us_census_ethnicity,
+`marts_phi.health_profile`.`hp_ancestry_ashkenazi_jewish` AS `hp_ancestry_ashkenazi_jewish`,
+a.birthday,
+`Care_Program_Participants_Phi`.`age_at_registration` AS `Care_Program_Participants_Phi__age_at_registration`,
+`Care_Program_Participants_Phi`.`age_now` AS `Care_Program_Participants_Phi__age_now`,
+
+--- \\\\\\\\ ----
+
+--RISK LEVEL --
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_stratification_level` AS `hp_hereditary_cancer_risk_stratification_level`,
+
+--- \\\\\\\\ ----
+-- BREAST CANCER SCREENING + RISK --
+`marts_phi.health_profile`.`hp_breast_cancer_risk_stratification_level` AS `hp_breast_cancer_risk_stratification_level`,
+`marts_phi.health_profile`.`hp_breast_cancer_screening_adherence` AS `hp_breast_cancer_screening_adherence`,  
+`marts_phi.health_profile`.`hp_breast_cancer_time_since_last_mammogram` AS `hp_breast_cancer_time_since_last_mammogram`,
+
+--RISK FACTOR: Personal dx of Breast cancer dx (or other cancers)
+  `marts_phi.health_profile`.`hp_breast_cancer_yn` AS `hp_breast_cancer_yn`,
+    `marts_phi.health_profile`.`hp_breast_cancer_diagnosis_yn` AS `hp_breast_cancer_diagnosis_yn`,
+
+  `marts_phi.health_profile`.`hp_fallopian_tube_cancer_yn` AS `hp_fallopian_tube_cancer_yn`,
+
+  `marts_phi.health_profile`.`hp_ovarian_cancer_yn` AS `hp_ovarian_cancer_yn`,
+
+--- Had personal hx of radiation to chest between 10 - 30 y/o
+  `marts_phi.health_profile`.`hp_had_chest_radiation_treatment_yn` AS `hp_had_chest_radiation_treatment_yn`,
+    `marts_phi.health_profile`.`hp_breast_cancer_had_chest_radiation_treatment_yn` AS `hp_breast_cancer_had_chest_radiation_treatment_yn`,
+
+  `marts_phi.health_profile`.`hp_breast_cancer_age_at_first_chest_radiation_treatment` AS `hp_breast_cancer_age_at_first_chest_radiation_treatment`,
+    `marts_phi.health_profile`.`hp_age_at_first_chest_radiation_treatment` AS `hp_age_at_first_chest_radiation_treatment`,
+
+-- Procedures
+`marts_phi.health_profile`.`hp_mastectomy_yn` AS `hp_mastectomy_yn`, 
+`marts_phi.health_profile`.`hp_bilateral_mastectomy_yn` AS `hp_bilateral_mastectomy_yn`,  
+  `marts_phi.health_profile`.`hp_procedure_bilateral_mastectomy_yn` AS `hp_procedure_bilateral_mastectomy_yn`,
+`marts_phi.health_profile`.`hp_unilateral_mastectomy_yn` AS `hp_unilateral_mastectomy_yn`,
+  `marts_phi.health_profile`.`hp_procedure_unilateral_mastectomy_yn` AS `hp_procedure_unilateral_mastectomy_yn`,
+
+---RISK FACTOR: Known personal dx of: Li-Fraumeni syndrome, Cowden syndrome, Bannayan-Riley-Ruvalcaba syndrome, OR HBOC (BRCA1 or BRCA2 mutation)
+  `marts_phi.health_profile`.`hp_interested_in_genetics_test_yn` AS `hp_interested_in_genetics_test_yn`,  
+  `marts_phi.health_profile`.`hp_genetic_test_and_known_mutation_yn` AS `hp_genetic_test_and_known_mutation_yn`,
+  `marts_phi.health_profile`.`hp_genetic_test_for_hereditary_cancer_risk_yn` AS `hp_genetic_test_for_hereditary_cancer_risk_yn`,
+ 
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_yn` AS `hp_hereditary_cancer_risk_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn` AS  `hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_brca1_and_brca2_mutation_yn` AS `hp_hereditary_risk_type_brca1_and_brca2_mutation_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_cowden_syndrome_yn` AS `hp_hereditary_risk_type_cowden_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_li_fraumeni_syndrome_yn` AS `hp_hereditary_risk_type_li_fraumeni_syndrome_yn`,
+
+-- FAMILY HX RISK FACTORS ---
+
+---RISK FACTOR: First-degree relative w/ breast cancer (BC) dx prior to 50 y/o
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_breast_cancer_yn` AS `hp_first_degree_relative_with_breast_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_breast_cancer_age_range` AS `hp_first_degree_relative_with_breast_cancer_age_range`,
+
+  `marts_phi.health_profile`.`hp_relative_with_breast_cancer_yn` AS `hp_relative_with_breast_cancer_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_breast_cancer_age_range` AS `hp_relative_with_breast_cancer_age_range`,
+
+--- **Male relative w/ BC 
+    `marts_phi.health_profile`.`hp_male_relative_with_breast_cancer_yn` AS `hp_male_relative_with_breast_cancer_yn`,
+
+---RISK FACTOR: First-degree relative w/ dx of prostate cancer prior to 50 y/o
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_prostate_cancer_yn` AS `hp_first_degree_relative_with_prostate_cancer_yn`,
+    `marts_phi.health_profile`.`hp_first_degree_relative_with_prostate_cancer_age_range` AS `hp_first_degree_relative_with_prostate_cancer_age_range`,
+  `marts_phi.health_profile`.`hp_relative_with_prostate_cancer_yn` AS `hp_relative_with_prostate_cancer_yn`,
+    `marts_phi.health_profile`.`hp_relative_with_prostate_cancer_age_range` AS `hp_relative_with_prostate_cancer_age_range`,
+  `marts_phi.health_profile`.`hp_testicular_cancer_diagnosis_yn` AS `hp_testicular_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_testicular_cancer_age_range` AS `hp_first_degree_relative_with_testicular_cancer_age_range`,
+
+
+---RISK FACTOR: First-degree relative w/ dx of  pancreatic cancer, ovarian cancer or fallopian tube cancer at any any age
+ `marts_phi.health_profile`.`hp_first_degree_relative_with_fallopian_tube_cancer_yn` AS `hp_first_degree_relative_with_fallopian_tube_cancer_yn`,
+   `marts_phi.health_profile`.`hp_first_degree_relative_with_fallopian_tube_cancer_age_range` AS `hp_first_degree_relative_with_fallopian_tube_cancer_66536fb4`,
+ `marts_phi.health_profile`.`hp_relative_with_fallopian_tube_cancer_yn` AS `hp_relative_with_fallopian_tube_cancer_yn`,
+   `marts_phi.health_profile`.`hp_relative_with_fallopian_tube_cancer_age_range` AS `hp_relative_with_fallopian_tube_cancer_age_range`,
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_ovarian_cancer_yn` AS `hp_first_degree_relative_with_ovarian_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_ovarian_cancer_age_range` AS `hp_first_degree_relative_with_ovarian_cancer_age_range`,
+`marts_phi.health_profile`.`hp_relative_with_ovarian_cancer_yn` AS `hp_relative_with_ovarian_cancer_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_ovarian_cancer_age_range` AS `hp_relative_with_ovarian_cancer_age_range`,
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_pancreatic_cancer_yn` AS `hp_first_degree_relative_with_pancreatic_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_pancreatic_cancer_age_range` AS `hp_first_degree_relative_with_pancreatic_cancer_age_range`,
+`marts_phi.health_profile`.`hp_relative_with_pancreatic_cancer_yn` AS `hp_relative_with_pancreatic_cancer_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_pancreatic_cancer_age_range` AS `hp_relative_with_pancreatic_cancer_age_range`,
+
+  `marts_phi.health_profile`.`hp_two_or_more_relatives_on_same_side_of_family_with_cancer_yn` AS `hp_two_or_more_relatives_on_same_side_of_family_wit_77ee2db3`,
+
+--- RISK FACTOR: Known first-degree relative w/ known dx of: Li-Fraumeni syndrome, Cowden syndrome, Bannayan-Riley-Ruvalcaba syndrome, OR HBOC (BRCA1 or BRCA2 mutation)
+  `marts_phi.health_profile`.`hp_relative_has_hereditary_cancer_risk_yn` AS `hp_relative_has_hereditary_cancer_risk_yn`,  
+  `marts_phi.health_profile`.`hp_relative_with_known_genetic_mutation_yn` AS `hp_relative_with_known_genetic_mutation_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_li_fraumeni_syndrome_yn` AS `hp_relative_with_li_fraumeni_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_cowden_syndrome_yn` AS `hp_relative_with_cowden_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_bannayan_riley_ruvalcaba_syndrome_yn` AS `hp_relative_with_bannayan_riley_ruvalcaba_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_hereditary_breast_and_ovarian_cancer_syndrome_yn` AS `hp_relative_with_hereditary_breast_and_ovarian_canc_c2e61f98`,
+
+--- SYMPTOMS ---
+  `marts_phi.health_profile`.`hp_breast_cancer_symptom_change_in_breast_size_or_shape_yn` AS `hp_breast_cancer_symptom_change_in_breast_size_or_shape_yn`,
+  `marts_phi.health_profile`.`hp_breast_cancer_symptom_irritation_or_dimpling_of_breast_skin_yn` AS `hp_breast_cancer_symptom_irritation_or_dimpling_of__741e3637`,
+  `marts_phi.health_profile`.`hp_breast_cancer_symptom_new_lump_in_breast_or_underarm_yn` AS `hp_breast_cancer_symptom_new_lump_in_breast_or_underarm_yn`,
+  `marts_phi.health_profile`.`hp_breast_cancer_symptom_nipple_discharge_yn` AS `hp_breast_cancer_symptom_nipple_discharge_yn`,
+  `marts_phi.health_profile`.`hp_breast_cancer_symptom_pulling_or_pain_in_nipple_yn` AS `hp_breast_cancer_symptom_pulling_or_pain_in_nipple_yn`,
+  `marts_phi.health_profile`.`hp_breast_cancer_symptom_redness_or_flaky_skin_in_nipple_area_or_breast_yn` AS `hp_breast_cancer_symptom_redness_or_flaky_skin_in_n_08c0e613`,
+  `marts_phi.health_profile`.`hp_breast_cancer_symptom_thickening_or_swelling_of_breast_yn` AS `hp_breast_cancer_symptom_thickening_or_swelling_of_breast_yn`,
+  
+--- \\\\\\\\ ----
+-----
+  `Care_Program_Participants_Phi`.`has_health_profile` AS `Care_Program_Participants_Phi__has_health_profile`,
+  `Care_Program_Participants_Phi`.`population_id` AS `Care_Program_Participants_Phi__population_id`,
+  `Care_Program_Participants_Phi`.`program_id` AS `Care_Program_Participants_Phi__program_id`,
+  `Care_Program_Participants_Phi`.`population_membership_created_at` AS `Care_Program_population_membership_created_at`,
+  a._src_created_at,
+  a._src_updated_at,
+
+FROM
+  `dw-color.marts_phi.health_profile` `marts_phi.health_profile`
+ 
+LEFT JOIN `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi` ON `marts_phi.health_profile`.`health_profile_id` = `Care_Program_Participants_Phi`.`health_profile_id`
+LEFT JOIN `dw-color.intermediate_phi.users_coloruser` `a` ON `marts_phi.health_profile`.`coloruser_id` = `a`.`coloruser_id`
+
+WHERE
+  ( `Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+    AND `Care_Program_Participants_Phi`.`is_fake` = FALSE
+    AND `Care_Program_Participants_Phi`.`count_participants_with_care_plan` = 1
+    AND   `a`.`sex_assigned_at_birth` = 'F'
+  )
+"
+
+tb <- bq_project_query(project_id, db_cancer_BREAST)
+raw_dat_cancer_BREAST <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_cancer_BREAST, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_cancer_BREAST',Sys.Date() ,'.csv' ))
+
+
+
+```
+
+```{r db_CERVICAL}
+##download CERVICAL CANCER DATA
+
+project_id = 'dw-color'
+db_cancer_CERVICAL = "
+SELECT
+  `marts_phi.health_profile`.`coloruser_id` AS `coloruser_id`,
+  `marts_phi.health_profile`.`health_profile_id` AS `health_profile_id`,
+  `Care_Program_Participants_Phi`.`program` AS `Care_Program_Participants_Phi__program`,
+  `Care_Program_Participants_Phi`.`employee_type` AS `Care_Program_Participants_Phi__employee_type`,
+  `Care_Program_Participants_Phi`.`is_dependent` AS `Care_Program_Participants_Phi__is_dependent`,
+  `Care_Program_Participants_Phi`.`is_fake` AS `Care_Program_Participants_Phi__is_fake`,
+  `marts_phi.health_profile`.`hp_concern_other_help_text_yn` AS `hp_concern_other_help_text_yn`,
+a.address_zip_code,
+a.address_state,
+
+--DEMOGRAPHICS --
+a.preferred_name,
+a.pronouns,
+a.gender,
+a.sex_assigned_at_birth,
+a.gender_identity,
+a.self_described_gender_identity,
+a.sexual_orientation,
+a.self_described_sexual_orientation,
+a.preferred_locale,
+a.is_translator_required,
+a.preferred_locale_language,
+a.ethnicities,
+a.us_census_ethnicity,
+`marts_phi.health_profile`.`hp_ancestry_ashkenazi_jewish` AS `hp_ancestry_ashkenazi_jewish`,
+a.birthday,
+`Care_Program_Participants_Phi`.`age_at_registration` AS `Care_Program_Participants_Phi__age_at_registration`,
+`Care_Program_Participants_Phi`.`age_now` AS `Care_Program_Participants_Phi__age_now`,
+
+--- \\\\\\\\ ----
+
+--RISK LEVEL --
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_stratification_level` AS `hp_hereditary_cancer_risk_stratification_level`,
+
+ 
+--- \\\\\\\\ ----
+-- CERVICAL SCREENING + RISK --
+  `marts_phi.health_profile`.`hp_cervical_cancer_risk_stratification_level` AS `hp_cervical_cancer_risk_stratification_level`,
+ `marts_phi.health_profile`.`hp_cervical_cancer_screening_adherence` AS `hp_cervical_cancer_screening_adherence`, 
+ `marts_phi.health_profile`.`hp_cervical_cancer_time_since_last_screening` AS `hp_cervical_cancer_time_since_last_screening`,
+-- RISK FACTOR: Last cervical cancer screening was positive (i.e. last HPV test OR pap smear was positive)
+  `marts_phi.health_profile`.`hp_cervical_cancer_screening_result` AS `hp_cervical_cancer_screening_result`,
+
+-- RISK FACTOR: Hx of cervical cancer
+  `marts_phi.health_profile`.`hp_cervical_cancer_diagnosis_yn` AS `hp_cervical_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_cervical_cancer_in_remission_yn` AS `hp_cervical_cancer_in_remission_yn`,
+  `marts_phi.health_profile`.`hp_cervical_cancer_yn` AS `hp_cervical_cancer_yn`,
+  `marts_phi.health_profile`.`hp_cervical_cancer_age_at_diagnosis` AS `hp_cervical_cancer_age_at_diagnosis`,
+
+---RISK FACTOR: Has a genetic mutation
+  `marts_phi.health_profile`.`hp_interested_in_genetics_test_yn` AS `hp_interested_in_genetics_test_yn`,  
+  `marts_phi.health_profile`.`hp_genetic_test_and_known_mutation_yn` AS `hp_genetic_test_and_known_mutation_yn`,
+  `marts_phi.health_profile`.`hp_genetic_test_for_hereditary_cancer_risk_yn` AS `hp_genetic_test_for_hereditary_cancer_risk_yn`,
+
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_yn` AS `hp_hereditary_cancer_risk_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn` AS `hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_brca1_and_brca2_mutation_yn` AS `hp_hereditary_risk_type_brca1_and_brca2_mutation_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_cowden_syndrome_yn` AS `hp_hereditary_risk_type_cowden_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_li_fraumeni_syndrome_yn` AS `hp_hereditary_risk_type_li_fraumeni_syndrome_yn`,
+
+-- PROCEDURES - Hysterectomy (partial or total)
+  `marts_phi.health_profile`.`hp_procedure_hysterectomy_yn` AS `hp_procedure_hysterectomy_yn`,
+  `marts_phi.health_profile`.`hp_hysterectomy_yn` AS `hp_hysterectomy_yn`,
+  `marts_phi.health_profile`.`hp_procedure_hysterectomy_type` AS `hp_procedure_hysterectomy_type`,
+  `marts_phi.health_profile`.`hp_hysterectomy_type` AS `hp_hysterectomy_type`,
+
+-- FAMILY HX ---
+ `marts_phi.health_profile`.`hp_relative_has_hereditary_cancer_risk_yn` AS `hp_relative_has_hereditary_cancer_risk_yn`,  
+  `marts_phi.health_profile`.`hp_relative_with_known_genetic_mutation_yn` AS `hp_relative_with_known_genetic_mutation_yn`, 
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_cervical_cancer_yn` AS `hp_first_degree_relative_with_cervical_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_cervical_cancer_age_range` AS `hp_first_degree_relative_with_cervical_cancer_age_range`,
+
+  `marts_phi.health_profile`.`hp_relative_with_cervical_cancer_yn` AS `hp_relative_with_cervical_cancer_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_cervical_cancer_age_range` AS `hp_relative_with_cervical_cancer_age_range`,
+
+-- IS Transgender <- see gender/sex
+
+
+--- SYMPTOMS ---
+ `marts_phi.health_profile`.`hp_cervical_cancer_symptom_bleeding_after_intercourse_or_between_periods_or_after_pelvic_exam_yn` AS `hp_cervical_cancer_symptom_bleeding_after_intercour_910a8836`,
+  `marts_phi.health_profile`.`hp_cervical_cancer_symptom_bleeding_after_menopause_yn` AS `hp_cervical_cancer_symptom_bleeding_after_menopause_yn`,
+  `marts_phi.health_profile`.`hp_cervical_cancer_symptom_heavy_vaginal_bleeding_yn` AS `hp_cervical_cancer_symptom_heavy_vaginal_bleeding_yn`,
+  `marts_phi.health_profile`.`hp_cervical_cancer_symptom_unexplained_persistent_pelvic_or_back_pain_yn` AS `hp_cervical_cancer_symptom_unexplained_persistent_p_88591c86`,
+
+--- \\\\\\\\ ----
+  `Care_Program_Participants_Phi`.`has_health_profile` AS `Care_Program_Participants_Phi__has_health_profile`,
+  `Care_Program_Participants_Phi`.`population_id` AS `Care_Program_Participants_Phi__population_id`,
+  `Care_Program_Participants_Phi`.`program_id` AS `Care_Program_Participants_Phi__program_id`,
+  `Care_Program_Participants_Phi`.`population_membership_created_at` AS `Care_Program_population_membership_created_at`,
+  a._src_created_at,
+  a._src_updated_at,
+
+FROM
+  `dw-color.marts_phi.health_profile` `marts_phi.health_profile`
+
+LEFT JOIN `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi` ON `marts_phi.health_profile`.`health_profile_id` = `Care_Program_Participants_Phi`.`health_profile_id`
+LEFT JOIN `dw-color.intermediate_phi.users_coloruser` `a` ON `marts_phi.health_profile`.`coloruser_id` = `a`.`coloruser_id`
+
+WHERE
+  (
+    `Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+   AND `Care_Program_Participants_Phi`.`is_fake` = FALSE
+    AND `Care_Program_Participants_Phi`.`count_participants_with_care_plan` = 1
+    AND  `a`.`sex_assigned_at_birth` = 'F'
+  )
+"
+
+tb <- bq_project_query(project_id, db_cancer_CERVICAL)
+raw_dat_cancer_CERVICAL <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_cancer_CERVICAL, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_cancer_CERVICAL',Sys.Date() ,'.csv' ))
+
+
+```
+
+```{r db_LUNG}
+##download LUNG CANCER DATA
+
+project_id = 'dw-color'
+db_cancer_LUNG = "
+SELECT
+  `marts_phi.health_profile`.`coloruser_id` AS `coloruser_id`,
+  `marts_phi.health_profile`.`health_profile_id` AS `health_profile_id`,
+  `Care_Program_Participants_Phi`.`program` AS `Care_Program_Participants_Phi__program`,
+  `Care_Program_Participants_Phi`.`employee_type` AS `Care_Program_Participants_Phi__employee_type`,
+  `Care_Program_Participants_Phi`.`is_dependent` AS `Care_Program_Participants_Phi__is_dependent`,
+  `Care_Program_Participants_Phi`.`is_fake` AS `Care_Program_Participants_Phi__is_fake`,
+  a.address_zip_code,
+  a.address_state,
+
+--DEMOGRAPHICS --
+a.preferred_name,
+a.pronouns,
+a.gender,
+a.sex_assigned_at_birth,
+a.gender_identity,
+a.self_described_gender_identity,
+a.sexual_orientation,
+a.self_described_sexual_orientation,
+a.preferred_locale,
+a.is_translator_required,
+a.preferred_locale_language,
+a.ethnicities,
+a.us_census_ethnicity,
+`marts_phi.health_profile`.`hp_ancestry_ashkenazi_jewish` AS `hp_ancestry_ashkenazi_jewish`,
+a.birthday,
+`Care_Program_Participants_Phi`.`age_at_registration` AS `Care_Program_Participants_Phi__age_at_registration`,
+`Care_Program_Participants_Phi`.`age_now` AS `Care_Program_Participants_Phi__age_now`,
+
+-- SMOKING HX ---
+  `marts_phi.health_profile`.`hp_smoking_status` AS `hp_smoking_status`,
+  `Care_Program_Participants_Phi`.`count_current_smoker` AS `Care_Program_Participants_Phi__count_current_smoker`,
+  `marts_phi.health_profile`.`hp_smoking_number_years` AS `hp_smoking_number_years`,
+  `marts_phi.health_profile`.`hp_smoking_years_quit` AS `hp_smoking_years_quit`,
+  `marts_phi.health_profile`.`hp_smoking_cigs_per_day` AS `hp_smoking_cigs_per_day`,
+
+--- \\\\\\\\ ----
+-- RISK FACTORS / CRITERIA --
+-- ≥50 years old AND current smoker with a 20 pack year smoking history
+-- ≥50 years old true AND Former Smoker who has quit within the last 15 years AND has a 20 pack year smoking history
+-- Has personal history of any cancer
+-- Has a personal genetic mutation
+
+--RISK LEVEL --
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_stratification_level` AS `hp_hereditary_cancer_risk_stratification_level`,
+
+ 
+--- \\\\\\\\ ----
+-- LUNG CANCER SCREENING + RISK --
+  `marts_phi.health_profile`.`hp_lung_cancer_risk_stratification_level` AS `hp_lung_cancer_risk_stratification_level`,
+  `marts_phi.health_profile`.`hp_lung_cancer_screening_adherence` AS `hp_lung_cancer_screening_adherence`,
+  `marts_phi.health_profile`.`hp_lung_cancer_time_since_low_dose_ct_scan` AS `hp_lung_cancer_time_since_low_dose_ct_scan`,
+
+
+---- ///////// ----
+--PERSONAL HX LUNG CANCER
+  `marts_phi.health_profile`.`hp_lung_cancer_diagnosis_yn` AS `hp_lung_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_lung_cancer_age_at_diagnosis` AS `hp_lung_cancer_age_at_diagnosis`,
+   `marts_phi.health_profile`.`hp_lung_cancer_yn` AS `hp_lung_cancer_yn`,
+
+--- RISK FACTOR: Has a genetic mutation, aka “Yes” to `Was a mutation (also called a pathogenic or likely pathogenic variant) identified?`
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_yn` AS `hp_hereditary_cancer_risk_yn`, 
+  `marts_phi.health_profile`.`hp_interested_in_genetics_test_yn` AS `hp_interested_in_genetics_test_yn`,  
+  `marts_phi.health_profile`.`hp_genetic_test_and_known_mutation_yn` AS `hp_genetic_test_and_known_mutation_yn`,
+  `marts_phi.health_profile`.`hp_genetic_test_for_hereditary_cancer_risk_yn` AS `hp_genetic_test_for_hereditary_cancer_risk_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_familial_adenomatous_polyposis_yn` AS `hp_hereditary_risk_type_familial_adenomatous_polyposis_yn`,
+  -- NO LYNCH <-----!!!
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn` AS `hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_brca1_and_brca2_mutation_yn` AS `hp_hereditary_risk_type_brca1_and_brca2_mutation_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_cowden_syndrome_yn` AS `hp_hereditary_risk_type_cowden_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_li_fraumeni_syndrome_yn` AS `hp_hereditary_risk_type_li_fraumeni_syndrome_yn`,
+
+---- ///////// ---- 
+-- FAMILY HX RISK FACTORS ---
+
+--- RISK FACTOR: First-degree relative w/ known dx of: Familial Adenomatous Polyposis (FAP) OR HNPCC (Lynch syndrome)
+  `marts_phi.health_profile`.`hp_relative_has_hereditary_cancer_risk_yn` AS `hp_relative_has_hereditary_cancer_risk_yn`,  
+  `marts_phi.health_profile`.`hp_relative_with_known_genetic_mutation_yn` AS `hp_relative_with_known_genetic_mutation_yn`, 
+
+---- ///////// ----
+--- SYMPTOMS ---
+`marts_phi.health_profile`.`hp_lung_cancer_symptom_coughing_blood_yn` AS `hp_lung_cancer_symptom_coughing_blood_yn`,
+  `marts_phi.health_profile`.`hp_lung_cancer_symptom_feeling_very_tired_all_the_time_yn` AS `hp_lung_cancer_symptom_feeling_very_tired_all_the_time_yn`,
+  `marts_phi.health_profile`.`hp_lung_cancer_symptom_persistent_cough_yn` AS `hp_lung_cancer_symptom_persistent_cough_yn`,
+  `marts_phi.health_profile`.`hp_lung_cancer_symptom_unexplained_weight_loss_yn` AS `hp_lung_cancer_symptom_unexplained_weight_loss_yn`,
+ 
+---- ///////// ----
+   
+  `Care_Program_Participants_Phi`.`has_health_profile` AS `Care_Program_Participants_Phi__has_health_profile`,
+  `Care_Program_Participants_Phi`.`population_id` AS `Care_Program_Participants_Phi__population_id`,
+  `Care_Program_Participants_Phi`.`program_id` AS `Care_Program_Participants_Phi__program_id`,
+  `Care_Program_Participants_Phi`.`population_membership_created_at` AS `Care_Program_population_membership_created_at`,
+  a._src_created_at,
+  a._src_updated_at,
+
+FROM
+  `dw-color.marts_phi.health_profile` `marts_phi.health_profile`
+
+LEFT JOIN `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi` ON `marts_phi.health_profile`.`health_profile_id` = `Care_Program_Participants_Phi`.`health_profile_id`
+LEFT JOIN `dw-color.intermediate_phi.users_coloruser` `a` ON `marts_phi.health_profile`.`coloruser_id` = `a`.`coloruser_id`
+
+WHERE
+  (`Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+        AND `Care_Program_Participants_Phi`.`is_fake` = FALSE
+          AND `Care_Program_Participants_Phi`.`count_participants_with_care_plan` = 1)
+"
+
+tb <- bq_project_query(project_id, db_cancer_LUNG)
+raw_dat_cancer_LUNG <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_cancer_LUNG, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_cancer_LUNG',Sys.Date() ,'.csv' ))
+
+```
+
+```{r db_PROSTATE}
+##download PROSTATE CANCER DATA
+
+project_id = 'dw-color'
+db_cancer_PROSTATE = "
+SELECT
+  `marts_phi.health_profile`.`coloruser_id` AS `coloruser_id`,
+  `marts_phi.health_profile`.`health_profile_id` AS `health_profile_id`,
+  `Care_Program_Participants_Phi`.`program` AS `Care_Program_Participants_Phi__program`,
+  `Care_Program_Participants_Phi`.`employee_type` AS `Care_Program_Participants_Phi__employee_type`,
+  `Care_Program_Participants_Phi`.`is_dependent` AS `Care_Program_Participants_Phi__is_dependent`,
+  `Care_Program_Participants_Phi`.`is_fake` AS `Care_Program_Participants_Phi__is_fake`,
+  `marts_phi.health_profile`.`hp_concern_other_help_text_yn` AS `hp_concern_other_help_text_yn`,
+ a.address_zip_code,
+ a.address_state,
+
+--DEMOGRAPHICS --
+a.preferred_name,
+a.pronouns,
+a.gender,
+a.sex_assigned_at_birth,
+a.gender_identity,
+a.self_described_gender_identity,
+a.sexual_orientation,
+a.self_described_sexual_orientation,
+a.preferred_locale,
+a.is_translator_required,
+a.preferred_locale_language,
+a.ethnicities,
+a.us_census_ethnicity,
+`marts_phi.health_profile`.`hp_ancestry_ashkenazi_jewish` AS `hp_ancestry_ashkenazi_jewish`,
+a.birthday,
+`Care_Program_Participants_Phi`.`age_at_registration` AS `Care_Program_Participants_Phi__age_at_registration`,
+`Care_Program_Participants_Phi`.`age_now` AS `Care_Program_Participants_Phi__age_now`,
+
+--- \\\\\\\\ ----
+--- \\\\\\\\ ADDITIONAL RISK FACTORS/CRITERIA ----
+-- RISK FACTOR: ≥40 years and ls African American/Black
+-- UNKNOWN RISK FACTOR: Has personal history of any cancer
+-- UNKNOWN RISK FACTOR: Has a genetic mutation, aka “Yes” to `Was a mutation (also called a pathogenic or likely pathogenic variant) identified?`
+
+--RISK LEVEL --
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_stratification_level` AS `hp_hereditary_cancer_risk_stratification_level`,
+ 
+--- \\\\\\\\ ----
+-- PROSTATE CANCER SCREENING + RISK --
+  `marts_phi.health_profile`.`hp_prostate_cancer_risk_stratification_level` AS `hp_prostate_cancer_risk_stratification_level`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_screening_adherence` AS `hp_prostate_cancer_screening_adherence`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_time_since_psa_screening` AS `hp_prostate_cancer_time_since_psa_screening`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_psa_test_result` AS `hp_prostate_cancer_psa_test_result`,
+
+--RISK FACTOR: ≥40 years and personal hx of testicular cancer
+  `marts_phi.health_profile`.`hp_prostate_cancer_diagnosis_yn` AS `hp_prostate_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_yn` AS `hp_prostate_cancer_yn`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_age_at_diagnosis` AS `hp_prostate_cancer_age_at_diagnosis`,
+
+  `marts_phi.health_profile`.`hp_testicular_cancer_diagnosis_yn` AS `hp_testicular_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_testicular_cancer_yn` AS `hp_testicular_cancer_yn`,
+
+-- UNKNOWN RISK FACTOR: Has a genetic mutation, aka “Yes” to `Was a mutation (also called a pathogenic or likely pathogenic variant) identified?`
+`marts_phi.health_profile`.`hp_interested_in_genetics_test_yn` AS `hp_interested_in_genetics_test_yn`,  
+`marts_phi.health_profile`.`hp_genetic_test_and_known_mutation_yn` AS `hp_genetic_test_and_known_mutation_yn`,
+`marts_phi.health_profile`.`hp_genetic_test_for_hereditary_cancer_risk_yn` AS `hp_genetic_test_for_hereditary_cancer_risk_yn`,
+   `marts_phi.health_profile`.`hp_hereditary_cancer_risk_yn` AS `hp_hereditary_cancer_risk_yn`,
+--RISK FACTOR: ≥40 years and personal dx of hereditary breast and ovarian cancer syndrome (HBOC) (i.e., germline genetic mutation in BRCA1 or BRCA2)
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_brca1_and_brca2_mutation_yn` AS `hp_hereditary_risk_type_brca1_and_brca2_mutation_yn`,
+
+-- PROCEDURES: UNKNOWN RISK FACTOR: Has had a prostatectomy (no prostate)
+  `marts_phi.health_profile`.`hp_procedure_prostatectomy_yn` AS `hp_procedure_prostatectomy_yn`,
+  `marts_phi.health_profile`.`hp_prostatectomy_yn` AS `hp_prostatectomy_yn`,
+
+-- FAMILY HX RISK FACTORS ---
+
+--RISK FACTOR: ≥40 years and Family hx of prostate cancer in a first-degree relative diagnosed < 65 years OR ≥40 years AMAB and Family hx of prostate cancer in a first-degree relative diagnosed < 65 years
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_prostate_cancer_yn` AS `hp_first_degree_relative_with_prostate_cancer_yn`,
+    `marts_phi.health_profile`.`hp_first_degree_relative_with_prostate_cancer_age_range` AS `hp_first_degree_relative_with_prostate_cancer_age_range`,
+  `marts_phi.health_profile`.`hp_relative_with_prostate_cancer_yn` AS `hp_relative_with_prostate_cancer_yn`,
+    `marts_phi.health_profile`.`hp_relative_with_prostate_cancer_age_range` AS `hp_relative_with_prostate_cancer_age_range`,
+
+  `marts_phi.health_profile`.`hp_testicular_cancer_diagnosis_yn` AS `hp_testicular_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_testicular_cancer_age_range` AS `hp_first_degree_relative_with_testicular_cancer_age_range`,
+
+
+--- FAMILY HX: Known first-degree relative w/ known dx of: Li-Fraumeni syndrome, Cowden syndrome, Bannayan-Riley-Ruvalcaba syndrome, OR HBOC (BRCA1 or BRCA2 mutation)
+  `marts_phi.health_profile`.`hp_relative_has_hereditary_cancer_risk_yn` AS `hp_relative_has_hereditary_cancer_risk_yn`,  
+  `marts_phi.health_profile`.`hp_relative_with_known_genetic_mutation_yn` AS `hp_relative_with_known_genetic_mutation_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_li_fraumeni_syndrome_yn` AS `hp_relative_with_li_fraumeni_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_cowden_syndrome_yn` AS `hp_relative_with_cowden_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_bannayan_riley_ruvalcaba_syndrome_yn` AS `hp_relative_with_bannayan_riley_ruvalcaba_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_hereditary_breast_and_ovarian_cancer_syndrome_yn` AS `hp_relative_with_hereditary_breast_and_ovarian_canc_c2e61f98`,
+
+--- SYMPTOMS ---
+ `marts_phi.health_profile`.`hp_prostate_cancer_symptom_blood_in_urine_or_semen_yn` AS `hp_prostate_cancer_symptom_blood_in_urine_or_semen_yn`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_symptom_changes_in_size_firmness_or_texture_of_prostate_yn` AS `hp_prostate_cancer_symptom_changes_in_size_firmness_68b3b624`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_symptom_difficulty_urinating_yn` AS `hp_prostate_cancer_symptom_difficulty_urinating_yn`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_symptom_frequent_pain_in_lower_back_pelvic_or_rectal_area_yn` AS `hp_prostate_cancer_symptom_frequent_pain_in_lower_b_32f42917`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_symptom_frequent_urges_to_urinate_yn` AS `hp_prostate_cancer_symptom_frequent_urges_to_urinate_yn`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_symptom_pain_or_burning_during_urination_or_ejaculation_yn` AS `hp_prostate_cancer_symptom_pain_or_burning_during_u_26b5809d`,
+  `marts_phi.health_profile`.`hp_prostate_cancer_symptom_pain_when_touching_the_prostate_yn` AS `hp_prostate_cancer_symptom_pain_when_touching_the_p_8985644e`,
+
+----
+  `Care_Program_Participants_Phi`.`has_health_profile` AS `Care_Program_Participants_Phi__has_health_profile`,
+  `Care_Program_Participants_Phi`.`population_id` AS `Care_Program_Participants_Phi__population_id`,
+  `Care_Program_Participants_Phi`.`program_id` AS `Care_Program_Participants_Phi__program_id`,
+  `Care_Program_Participants_Phi`.`population_membership_created_at` AS `Care_Program_population_membership_created_at`,
+  a._src_created_at,
+  a._src_updated_at,
+
+FROM
+  `dw-color.marts_phi.health_profile` `marts_phi.health_profile`
+
+LEFT JOIN `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi` ON `marts_phi.health_profile`.`health_profile_id` = `Care_Program_Participants_Phi`.`health_profile_id`
+LEFT JOIN `dw-color.intermediate_phi.users_coloruser` `a` ON `marts_phi.health_profile`.`coloruser_id` = `a`.`coloruser_id`
+
+WHERE
+  (`Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+    AND `Care_Program_Participants_Phi`.`is_fake` = FALSE
+    AND `Care_Program_Participants_Phi`.`count_participants_with_care_plan` = 1
+    AND  `a`.`sex_assigned_at_birth` = 'M')
+"
+
+tb <- bq_project_query(project_id, db_cancer_PROSTATE)
+raw_dat_cancer_PROSTATE <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_cancer_PROSTATE, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_cancer_PROSTATE',Sys.Date() ,'.csv' ))
+
+```
+
+```{r db_CRC}
+##download CRC CANCER DATA
+
+project_id = 'dw-color'
+db_cancer_CRC = "
+SELECT
+  `marts_phi.health_profile`.`coloruser_id` AS `coloruser_id`,
+  `marts_phi.health_profile`.`health_profile_id` AS `health_profile_id`,
+  `Care_Program_Participants_Phi`.`program` AS `Care_Program_Participants_Phi__program`,
+  `Care_Program_Participants_Phi`.`employee_type` AS `Care_Program_Participants_Phi__employee_type`,
+  `Care_Program_Participants_Phi`.`is_dependent` AS `Care_Program_Participants_Phi__is_dependent`,
+  `Care_Program_Participants_Phi`.`is_fake` AS `Care_Program_Participants_Phi__is_fake`,
+  `marts_phi.health_profile`.`hp_concern_other_help_text_yn` AS `hp_concern_other_help_text_yn`,
+  a.address_zip_code,
+  a.address_state,
+
+--DEMOGRAPHICS --
+a.preferred_name,
+a.pronouns,
+a.gender,
+a.sex_assigned_at_birth,
+a.gender_identity,
+a.self_described_gender_identity,
+a.sexual_orientation,
+a.self_described_sexual_orientation,
+a.preferred_locale,
+a.is_translator_required,
+a.preferred_locale_language,
+a.ethnicities,
+a.us_census_ethnicity,
+`marts_phi.health_profile`.`hp_ancestry_ashkenazi_jewish` AS `hp_ancestry_ashkenazi_jewish`,
+a.birthday,
+`Care_Program_Participants_Phi`.`age_at_registration` AS `Care_Program_Participants_Phi__age_at_registration`,
+`Care_Program_Participants_Phi`.`age_now` AS `Care_Program_Participants_Phi__age_now`,
+
+--- \\\\\\\\ ----
+
+-- Personal hx of any cancer
+
+--RISK LEVEL --
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_stratification_level` AS `hp_hereditary_cancer_risk_stratification_level`,
+
+ 
+--- \\\\\\\\ ----
+-- COLORECTAL CANCER SCREENING + RISK --
+  `marts_phi.health_profile`.`hp_colorectal_cancer_risk_stratification_level` AS `hp_colorectal_cancer_risk_stratification_level`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_screening_adherence` AS `hp_colorectal_cancer_screening_adherence`,
+`marts_phi.health_profile`.`hp_colorectal_cancer_time_since_last_colonoscopy` AS `hp_colorectal_cancer_time_since_last_colonoscopy`,
+ `marts_phi.health_profile`.`hp_colorectal_cancer_result_last_colonoscopy` AS `hp_colorectal_cancer_result_last_colonoscopy`,
+`marts_phi.health_profile`.`hp_colorectal_cancer_time_since_last_partial_colonoscopy` AS `hp_colorectal_cancer_time_since_last_partial_colonoscopy`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_result_last_partial_colonoscopy` AS `hp_colorectal_cancer_result_last_partial_colonoscopy`,
+`marts_phi.health_profile`.`hp_colorectal_cancer_time_since_last_stool_blood_test` AS `hp_colorectal_cancer_time_since_last_stool_blood_test`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_result_last_stool_blood_test` AS `hp_colorectal_cancer_result_last_stool_blood_test`,
+ `marts_phi.health_profile`.`hp_colorectal_cancer_time_since_last_stool_dna_test` AS `hp_colorectal_cancer_time_since_last_stool_dna_test`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_result_last_stool_dna_test` AS `hp_colorectal_cancer_result_last_stool_dna_test`,
+ `marts_phi.health_profile`.`hp_colorectal_cancer_time_since_last_virtual_colonoscopy` AS `hp_colorectal_cancer_time_since_last_virtual_colonoscopy`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_result_last_virtual_colonoscopy` AS `hp_colorectal_cancer_result_last_virtual_colonoscopy`,
+
+---- ///////// ----
+--RISK FACTOR: Personal hx of colorectal cancer
+`marts_phi.health_profile`.`hp_colon_cancer_diagnosis_yn` AS `hp_colon_cancer_diagnosis_yn`,
+  -- NO AGE 
+`marts_phi.health_profile`.`hp_colorectal_cancer_yn` AS `hp_colorectal_cancer_yn`,
+    `marts_phi.health_profile`.`hp_colorectal_cancer_age_at_diagnosis` AS `hp_colorectal_cancer_age_at_diagnosis`,
+`marts_phi.health_profile`.`hp_colon_cancer_yn` AS `hp_colon_cancer_yn`,
+    `marts_phi.health_profile`.`hp_colon_cancer_age_at_diagnosis` AS `hp_colon_cancer_age_at_diagnosis`,
+`marts_phi.health_profile`.`hp_rectal_cancer_yn` AS `hp_rectal_cancer_yn`,
+  -- NO AGE 
+`marts_phi.health_profile`.`hp_rectal_cancer_diagnosis_yn` AS `hp_rectal_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_rectal_cancer_age_at_diagnosis` AS `hp_rectal_cancer_age_at_diagnosis`,
+
+--RISK FACTOR: Personal hx of 10 or more adenomatous polyps
+  `marts_phi.health_profile`.`hp_polyps_diagnosis_yn` AS `hp_polyps_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_diagnosed_polyps_yn` AS `hp_diagnosed_polyps_yn`,
+  `marts_phi.health_profile`.`hp_had_10_or_more_polyps_yn` AS `hp_had_10_or_more_polyps_yn`,
+
+---RISK FACTOR: Personal dx of Cystic Fibrosis (CF), Inflammatory Bowel Disease (IBD), Ulcerative Colitis (UC), Crohn's disease, Familial Adenomatous Polyposis (FAP) OR HNPCC (Lynch syndrome)
+`marts_phi.health_profile`.`hp_cystic_fibrosis_diagnosis_yn` AS `hp_cystic_fibrosis_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_diagnosed_cystic_fibrosis_yn` AS `hp_diagnosed_cystic_fibrosis_yn`,
+`marts_phi.health_profile`.`hp_crohns_disease_diagnosis_yn` AS `hp_crohns_disease_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_diagnosed_crohns_disease_yn` AS `hp_diagnosed_crohns_disease_yn`,
+`marts_phi.health_profile`.`hp_diagnosed_inflammatory_bowel_disease_yn` AS `hp_diagnosed_inflammatory_bowel_disease_yn`,
+    `marts_phi.health_profile`.`hp_inflammatory_bowel_disease_diagnosis_yn` AS `hp_inflammatory_bowel_disease_diagnosis_yn`,
+`marts_phi.health_profile`.`hp_ulcerative_colitis_diagnosis_yn` AS `hp_ulcerative_colitis_diagnosis_yn`,
+    `marts_phi.health_profile`.`hp_diagnosed_ulcerative_colitis_yn` AS `hp_diagnosed_ulcerative_colitis_yn`,
+
+--- RISK FACTOR: Has a genetic mutation, aka “Yes” to `Was a mutation (also called a pathogenic or likely pathogenic variant) identified?`
+  `marts_phi.health_profile`.`hp_hereditary_cancer_risk_yn` AS `hp_hereditary_cancer_risk_yn`, 
+  `marts_phi.health_profile`.`hp_interested_in_genetics_test_yn` AS `hp_interested_in_genetics_test_yn`,  
+  `marts_phi.health_profile`.`hp_genetic_test_and_known_mutation_yn` AS `hp_genetic_test_and_known_mutation_yn`,
+  `marts_phi.health_profile`.`hp_genetic_test_for_hereditary_cancer_risk_yn` AS `hp_genetic_test_for_hereditary_cancer_risk_yn`,
+-- FAP + LYNCH   
+`marts_phi.health_profile`.`hp_hereditary_risk_type_familial_adenomatous_polyposis_yn` AS `hp_hereditary_risk_type_familial_adenomatous_polyposis_yn`,
+  -- NO LYNCH <-----!!!
+
+-- OTHER 
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn` AS `hp_hereditary_risk_type_bannayan_riley_ruvalcaba_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_brca1_and_brca2_mutation_yn` AS `hp_hereditary_risk_type_brca1_and_brca2_mutation_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_cowden_syndrome_yn` AS `hp_hereditary_risk_type_cowden_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_hereditary_risk_type_li_fraumeni_syndrome_yn` AS `hp_hereditary_risk_type_li_fraumeni_syndrome_yn`,
+
+-- PROCEDURES - Has colectomy (removal of colon)
+  `marts_phi.health_profile`.`hp_colectomy_yn` AS `hp_colectomy_yn`,
+  `marts_phi.health_profile`.`hp_procedure_colectomy_yn` AS `hp_procedure_colectomy_yn`,
+
+---- ///////// ---- 
+-- FAMILY HX RISK FACTORS ---
+
+---RISK FACTOR: Family hx of colorectal cancer in a first degree relative
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_colorectal_cancer_yn` AS `hp_first_degree_relative_with_colorectal_cancer_yn`,
+    `marts_phi.health_profile`.`hp_first_degree_relative_with_colorectal_cancer_age_range` AS `hp_first_degree_relative_with_colorectal_cancer_age_range`,
+ `marts_phi.health_profile`.`hp_relative_with_colorectal_cancer_yn` AS `hp_relative_with_colorectal_cancer_yn`,
+    `marts_phi.health_profile`.`hp_relative_with_colorectal_cancer_age_range` AS `hp_relative_with_colorectal_cancer_age_range`,
+
+---RISK FACTOR: Family hx of advanced adenomas in a first-degree relative at any age
+  `marts_phi.health_profile`.`hp_relative_with_colorectal_cancer_or_polyps_in_colon_or_rectum_yn` AS `hp_relative_with_colorectal_cancer_or_polyps_in_col_cee45d28`,
+
+--- RISK FACTOR: First-degree relative w/ known dx of: Familial Adenomatous Polyposis (FAP) OR HNPCC (Lynch syndrome)
+  `marts_phi.health_profile`.`hp_relative_has_hereditary_cancer_risk_yn` AS `hp_relative_has_hereditary_cancer_risk_yn`,  
+  `marts_phi.health_profile`.`hp_relative_with_known_genetic_mutation_yn` AS `hp_relative_with_known_genetic_mutation_yn`,
+-- FAP + LYNCH     
+`marts_phi.health_profile`.`hp_relative_with_familial_adenomatous_polyposis_yn` AS `hp_relative_with_familial_adenomatous_polyposis_yn`,
+    `marts_phi.health_profile`.`hp_hereditary_risk_type_familial_adenomatous_polyposis_yn` AS `hp_hereditary_risk_type_familial_adenomatous_polyposis_yn`,
+`marts_phi.health_profile`.`hp_relative_with_lynch_syndrome_yn` AS `hp_relative_with_lynch_syndrome_yn`,
+
+---OTHER 
+  `marts_phi.health_profile`.`hp_relative_with_li_fraumeni_syndrome_yn` AS `hp_relative_with_li_fraumeni_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_cowden_syndrome_yn` AS `hp_relative_with_cowden_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_bannayan_riley_ruvalcaba_syndrome_yn` AS `hp_relative_with_bannayan_riley_ruvalcaba_syndrome_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_hereditary_breast_and_ovarian_cancer_syndrome_yn` AS `hp_relative_with_hereditary_breast_and_ovarian_canc_c2e61f98`,
+
+
+--- SYMPTOMS ---
+  `marts_phi.health_profile`.`hp_colorectal_cancer_symptom_blood_in_stool_yn` AS `hp_colorectal_cancer_symptom_blood_in_stool_yn`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_symptom_change_in_bowel_movements_yn` AS `hp_colorectal_cancer_symptom_change_in_bowel_movements_yn`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_symptom_persistent_abdominal_or_rectal_pain_yn` AS `hp_colorectal_cancer_symptom_persistent_abdominal_o_97837a45`,
+  `marts_phi.health_profile`.`hp_colorectal_cancer_symptom_rectal_bleeding_yn` AS `hp_colorectal_cancer_symptom_rectal_bleeding_yn`,
+
+---- ///////// ---- 
+
+-- OTHER RISK FACTORS  
+
+-- Personal Hx Lynch syndrome (LS)-related cancers include: Brain cancer, Colon cancer, Rectal cancer, Fallopian tube cancer, Ovarian cancer, Pancreatic cancer, Stomach (gastric) cancer, and/or Uterine (endometrial) cancer.
+  `marts_phi.health_profile`.`hp_brain_cancer_diagnosis_yn` AS `hp_brain_cancer_diagnosis_yn`, 
+  `marts_phi.health_profile`.`hp_brain_cancer_age_at_diagnosis` AS `hp_brain_cancer_age_at_diagnosis`,
+
+  `marts_phi.health_profile`.`hp_fallopian_tube_cancer_yn` AS `hp_fallopian_tube_cancer_yn`,
+  `marts_phi.health_profile`.`hp_fallopian_tube_cancer_diagnosis_yn` AS `hp_fallopian_tube_cancer_diagnosis_yn`,
+
+  `marts_phi.health_profile`.`hp_ovarian_cancer_yn` AS `hp_ovarian_cancer_yn`,
+  `marts_phi.health_profile`.`hp_ovarian_cancer_diagnosis_yn` AS `hp_ovarian_cancer_diagnosis_yn`,
+
+  `marts_phi.health_profile`.`hp_pancreatic_cancer_diagnosis_yn` AS `hp_pancreatic_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_pancreatic_cancer_yn` AS `hp_pancreatic_cancer_yn`,
+
+  `marts_phi.health_profile`.`hp_stomach_cancer_diagnosis_yn` AS `hp_stomach_cancer_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_stomach_cancer_yn` AS `hp_stomach_cancer_yn`,
+  `marts_phi.health_profile`.`hp_stomach_cancer_age_at_diagnosis` AS `hp_stomach_cancer_age_at_diagnosis`,
+
+  `marts_phi.health_profile`.`hp_other_cancer_yn` AS `hp_other_cancer_yn`,
+
+    -- NO UTERINE CANCER FOR PERSONAL HX <<<<<
+
+----- Family HX Lynch syndrome (LS)-related cancers include: Brain cancer, Colon cancer, Rectal cancer, Fallopian tube cancer, Ovarian cancer, Pancreatic cancer, Stomach (gastric) cancer, and/or Uterine (endometrial) cancer.
+`marts_phi.health_profile`.`hp_first_degree_relative_with_brain_cancer_yn` AS `hp_first_degree_relative_with_brain_cancer_yn`,
+   `marts_phi.health_profile`.`hp_first_degree_relative_with_brain_cancer_age_range` AS `hp_first_degree_relative_with_brain_cancer_age_range`,
+`marts_phi.health_profile`.`hp_relative_with_brain_cancer_yn` AS `hp_relative_with_brain_cancer_yn`,
+    `marts_phi.health_profile`.`hp_relative_with_brain_cancer_age_range` AS `hp_relative_with_brain_cancer_age_range`,
+`marts_phi.health_profile`.`hp_brain_cancer_yn` AS `hp_brain_cancer_yn`,
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_stomach_gastric_cancer_yn` AS `hp_first_degree_relative_with_stomach_gastric_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_stomach_gastric_cancer_age_range` AS `hp_first_degree_relative_with_stomach_gastric_cance_2877f457`,
+`marts_phi.health_profile`.`hp_relative_with_stomach_gastric_cancer_age_range` AS `hp_relative_with_stomach_gastric_cancer_age_range`,
+  `marts_phi.health_profile`.`hp_relative_with_stomach_gastric_cancer_yn` AS `hp_relative_with_stomach_gastric_cancer_yn`,
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_uterine_endometrial_cancer_yn` AS `hp_first_degree_relative_with_uterine_endometrial_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_uterine_endometrial_cancer_age_range` AS `hp_first_degree_relative_with_uterine_endometrial_c_b957afdd`,
+`marts_phi.health_profile`.`hp_relative_with_uterine_endometrial_cancer_yn` AS `hp_relative_with_uterine_endometrial_cancer_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_uterine_endometrial_cancer_age_range` AS `hp_relative_with_uterine_endometrial_cancer_age_range`,
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_fallopian_tube_cancer_yn` AS `hp_first_degree_relative_with_fallopian_tube_cancer_yn`,
+   `marts_phi.health_profile`.`hp_first_degree_relative_with_fallopian_tube_cancer_age_range` AS `hp_first_degree_relative_with_fallopian_tube_cancer_66536fb4`,
+ `marts_phi.health_profile`.`hp_relative_with_fallopian_tube_cancer_yn` AS `hp_relative_with_fallopian_tube_cancer_yn`,
+   `marts_phi.health_profile`.`hp_relative_with_fallopian_tube_cancer_age_range` AS `hp_relative_with_fallopian_tube_cancer_age_range`,
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_ovarian_cancer_yn` AS `hp_first_degree_relative_with_ovarian_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_ovarian_cancer_age_range` AS `hp_first_degree_relative_with_ovarian_cancer_age_range`,
+`marts_phi.health_profile`.`hp_relative_with_ovarian_cancer_yn` AS `hp_relative_with_ovarian_cancer_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_ovarian_cancer_age_range` AS `hp_relative_with_ovarian_cancer_age_range`,
+
+`marts_phi.health_profile`.`hp_first_degree_relative_with_pancreatic_cancer_yn` AS `hp_first_degree_relative_with_pancreatic_cancer_yn`,
+  `marts_phi.health_profile`.`hp_first_degree_relative_with_pancreatic_cancer_age_range` AS `hp_first_degree_relative_with_pancreatic_cancer_age_range`,
+`marts_phi.health_profile`.`hp_relative_with_pancreatic_cancer_yn` AS `hp_relative_with_pancreatic_cancer_yn`,
+  `marts_phi.health_profile`.`hp_relative_with_pancreatic_cancer_age_range` AS `hp_relative_with_pancreatic_cancer_age_range`,
+
+  `marts_phi.health_profile`.`hp_two_or_more_relatives_on_same_side_of_family_with_cancer_yn` AS `hp_two_or_more_relatives_on_same_side_of_family_wit_77ee2db3`,
+
+  ------ Diabetes
+  `marts_phi.health_profile`.`hp_diabetes_diagnosis_yn` AS `hp_diabetes_diagnosis_yn`, 
+  `marts_phi.health_profile`.`hp_prediabetes_or_borderline_diabetes_diagnosis_yn` AS `hp_prediabetes_or_borderline_diabetes_diagnosis_yn`,
+  `marts_phi.health_profile`.`hp_diabetes_medications` AS `hp_diabetes_medications`,
+   
+  `Care_Program_Participants_Phi`.`has_health_profile` AS `Care_Program_Participants_Phi__has_health_profile`,
+  `Care_Program_Participants_Phi`.`population_id` AS `Care_Program_Participants_Phi__population_id`,
+  `Care_Program_Participants_Phi`.`program_id` AS `Care_Program_Participants_Phi__program_id`,
+  `Care_Program_Participants_Phi`.`population_membership_created_at` AS `Care_Program_population_membership_created_at`,
+  a._src_created_at,
+  a._src_updated_at,
+
+FROM
+  `dw-color.marts_phi.health_profile` `marts_phi.health_profile`
+
+LEFT JOIN `dw-color.marts_phi.care_program_participants_phi` `Care_Program_Participants_Phi` ON `marts_phi.health_profile`.`health_profile_id` = `Care_Program_Participants_Phi`.`health_profile_id`
+LEFT JOIN `dw-color.intermediate_phi.users_coloruser` `a` ON `marts_phi.health_profile`.`coloruser_id` = `a`.`coloruser_id`
+
+WHERE
+  (`Care_Program_Participants_Phi`.`program` = 'Shoestring Valley Holdings'
+        AND `Care_Program_Participants_Phi`.`is_fake` = FALSE
+          AND `Care_Program_Participants_Phi`.`count_participants_with_care_plan` = 1)
+"
+
+tb <- bq_project_query(project_id, db_cancer_CRC)
+raw_dat_cancer_CRC <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_cancer_CRC, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_cancer_CRC',Sys.Date() ,'.csv' ))
+
+```
+
+## ACTION ITEMS
+
+```{r db_action_items}
+##download ACTION ITEMS DATA
+
+project_id = 'dw-color'
+db_action_items = "
+SELECT
+a.coloruser_id,
+
+--DEMOGRAPHICS --
+a.preferred_name,
+a.address_zip_code,
+a.address_state,
+a.pronouns,
+a.gender,
+a.sex_assigned_at_birth,
+a.gender_identity,
+a.self_described_gender_identity,
+a.sexual_orientation,
+a.self_described_sexual_orientation,
+a.preferred_locale,
+a.is_translator_required,
+a.preferred_locale_language,
+a.ethnicities,
+a.us_census_ethnicity,
+a.birthday,
+  `marts.action_items`.`action_item_id` AS `action_item_id`,
+  `marts.action_items`.`service_category` AS `service_category`,
+  `marts.action_items`.`business_line` AS `business_line`,
+  `marts.action_items`.`product_area` AS `product_area`,
+  `marts.action_items`.`level_one_status` AS `level_one_status`,
+  `marts.action_items`.`level_two_status` AS `level_two_status`,
+  `marts.action_items`.`action_item_status` AS `action_item_status`,
+  `marts.action_items`.`type` AS `type`,
+  `marts.action_items`.`subtype` AS `subtype`,
+  `marts.action_items`.`assigned_to_coloruser_id` AS `assigned_to_coloruser_id`,
+  `marts.action_items`.`patient_id` AS `patient_id`,
+  `marts.action_items`.`is_fake` AS `is_fake`,
+  `marts.action_items`.`participant_code_for_counting` AS `participant_code_for_counting`,
+  `marts.action_items`.`population_ids` AS `population_ids`,
+  `marts.action_items`.`populations` AS `populations`,
+  `marts.action_items`.`program_ids` AS `program_ids`,
+  `marts.action_items`.`programs` AS `programs`,
+  `marts.action_items`.`presumed_care_program_population_id` AS `presumed_care_program_population_id`,
+  `marts.action_items`.`is_participant_in_cancer_beta` AS `is_participant_in_cancer_beta`,
+  `marts.action_items`.`can_be_declined` AS `can_be_declined`,
+  `marts.action_items`.`can_be_marked_completed` AS `can_be_marked_completed`,
+  `marts.action_items`.`priority` AS `priority`,
+  `marts.action_items`.`requested_at` AS `requested_at`,
+  `marts.action_items`.`requested_by_coloruser_id` AS `requested_by_coloruser_id`,
+  `marts.action_items`.`created_at` AS `created_at`,
+  `marts.action_items`.`updated_at` AS `updated_at`,
+  `marts.action_items`.`resolved_at` AS `resolved_at`,
+  `marts.action_items`.`current_state_timestamp` AS `current_state_timestamp`,
+  `marts.action_items`.`resolved_by_coloruser_id` AS `resolved_by_coloruser_id`,
+  `marts.action_items`.`resolved_reason` AS `resolved_reason`,
+  `marts.action_items`.`is_open` AS `is_open`,
+  `marts.action_items`.`is_completed` AS `is_completed`,
+  `marts.action_items`.`is_declined` AS `is_declined`,
+  `marts.action_items`.`is_canceled` AS `is_canceled`,
+  `marts.action_items`.`is_deleted` AS `is_deleted`,
+  `marts.action_items`.`tag_ids` AS `tag_ids`,
+  `marts.action_items`.`tag_names` AS `tag_names`,
+  `marts.action_items`.`condition_category` AS `condition_category`,
+  `marts.action_items`.`level_three_status` AS `level_three_status`,
+  `marts.action_items`.`level_one_status_order` AS `level_one_status_order`,
+  `marts.action_items`.`level_two_status_order` AS `level_two_status_order`,
+  `marts.action_items`.`action_item_status_order` AS `action_item_status_order`,
+  `marts.action_items`.`level_three_status_order` AS `level_three_status_order`,
+  `marts.action_items`.`_raw_status` AS `_raw_status`
+FROM
+  `dw-color.marts.action_items` `marts.action_items`
+  LEFT JOIN `dw-color.intermediate_phi.users_coloruser` `a` ON `marts.action_items`.`assigned_to_coloruser_id` = `a`.`coloruser_id`
+
+WHERE
+(  `marts.action_items`.`programs` = 'Shoestring Valley Holdings'
+  AND  `marts.action_items`.`is_fake` = FALSE
+)
+"
+
+
+tb <- bq_project_query(project_id, db_action_items)
+raw_dat_action_items <- bq_table_download(tb, n_max = Inf)
+## copy csv to desktop
+write.csv(raw_dat_action_items, paste0('/Users/hannah/Desktop/Program Evals/Cancer Prevention and Screening Programs/Shoestring (SVH) PE/datasets/raw_dat_action_items',Sys.Date() ,'.csv' ))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
